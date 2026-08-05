@@ -147,6 +147,25 @@ export default function Sell({ seller }) {
     loadProducts()
   }
 
+  async function addSpecificFund(method) {
+    const label = method === 'momo' ? 'Mobile Money (MoMo)' : 'Cash in Hand'
+    const input = prompt(`Add / Deposit money to ${label}:\n(Enter positive amount to add, or negative e.g. -5000 to withdraw):`, '10000')
+    if (input == null) return
+    const amt = Number(input)
+    if (isNaN(amt) || amt === 0) return
+
+    const reason = prompt(`Reason for ${label} addition (optional)?`, 'Float deposit') || 'Manual deposit'
+
+    const { error } = await supabase.from('balance_adjustments').insert({
+      payment_method: method,
+      amount: amt,
+      reason,
+    })
+
+    if (error) { alert(error.message); return }
+    setFlash(`${label} updated ✓`); setTimeout(() => setFlash(''), 1500)
+  }
+
 
   return (
     <div className="sell">
@@ -263,6 +282,10 @@ export default function Sell({ seller }) {
           <div className="segmented">
             <button className={paymentMethod === 'cash' ? 'active' : ''} onClick={() => setPaymentMethod('cash')}>💵 Cash</button>
             <button className={paymentMethod === 'momo' ? 'active' : ''} onClick={() => setPaymentMethod('momo')}>📱 MoMo</button>
+          </div>
+          <div className="quick-fund-actions">
+            <button className="btn small ghost" title="Deposit Float Money into Cash" onClick={() => addSpecificFund('cash')}>💵 + Cash Fund</button>
+            <button className="btn small ghost" title="Deposit Float Money into MoMo" onClick={() => addSpecificFund('momo')}>📱 + MoMo Fund</button>
           </div>
         </div>
 

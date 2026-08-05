@@ -170,7 +170,8 @@ input, select, textarea, button { font: inherit; }
 .stock-val-header { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
 .stock-val-total { font-size: 22px; color: var(--blue); }
 .pay-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; display: block; }
-.setup-mode-box { background: #f8fafc; border: 1px dashed var(--line); padding: 8px 12px; border-radius: 8px; font-size: 12px; }
+.quick-fund-actions { display: flex; gap: 6px; margin-left: auto; }
+
 
 
 

@@ -25,12 +25,14 @@ export default function Dashboard() {
     let eq = supabase.from('expenses').select('business,amount,created_at')
     if (start) { sq = sq.gte('created_at', start.toISOString()); eq = eq.gte('created_at', start.toISOString()) }
 
-    const [{ data: s }, { data: e }, { data: p }, { data: pay }, { data: adj }] = await Promise.all([
+    const [{ data: s }, { data: e }, { data: p }, { data: pay }, { data: adj }, { data: allSales }, { data: allPay }] = await Promise.all([
       sq, 
       eq,
       supabase.from('products').select('*').eq('active', true),
       supabase.from('payments').select('amount,payment_method,created_at'),
-      supabase.from('balance_adjustments').select('amount,payment_method,reason,created_at')
+      supabase.from('balance_adjustments').select('amount,payment_method,reason,created_at'),
+      supabase.from('sales').select('amount_paid,payment_method'),
+      supabase.from('payments').select('amount,payment_method'),
     ])
 
     setSales(s || [])
@@ -38,6 +40,8 @@ export default function Dashboard() {
     setProducts(p || [])
     setPayments(pay || [])
     setAdjustments(adj || [])
+    setAllSalesData(allSales || [])
+    setAllPaymentsData(allPay || [])
 
     // outstanding debts are cumulative (all time)
     const { data: all } = await supabase.from('sales').select('total,amount_paid')
@@ -76,17 +80,14 @@ export default function Dashboard() {
     load()
   }
 
-  async function addBalanceAdjustment() {
-    const methodChoice = prompt(`Which fund account?\nType 'cash' for Cash in Hand, or 'momo' for Mobile Money:`, 'cash')
-    if (!methodChoice) return
-    const method = methodChoice.toLowerCase().includes('momo') ? 'momo' : 'cash'
-
-    const amountInput = prompt(`Amount to add/adjust for ${method === 'momo' ? 'Mobile Money' : 'Cash in Hand'}?\n(Use negative value like -5000 to subtract):`, '10000')
-    if (!amountInput) return
-    const amt = Number(amountInput)
+  async function addSpecificFund(method) {
+    const label = method === 'momo' ? 'Mobile Money (MoMo)' : 'Cash in Hand'
+    const input = prompt(`Add / Deposit money to ${label}:\n(Enter positive amount to add, or negative e.g. -5000 to withdraw):`, '10000')
+    if (input == null) return
+    const amt = Number(input)
     if (isNaN(amt) || amt === 0) return
 
-    const reason = prompt('Reason for adjustment / float deposit (optional)?', 'Float deposit') || 'Manual adjustment'
+    const reason = prompt(`Reason for ${label} addition (optional)?`, 'Float deposit') || 'Manual deposit'
 
     const { error } = await supabase.from('balance_adjustments').insert({
       payment_method: method,
@@ -114,18 +115,18 @@ export default function Dashboard() {
     return { grandTotal, byBiz }
   }, [products])
 
-  // Payment Breakdown (Cash vs MoMo)
+  // Payment Breakdown (All-time Cash vs MoMo)
   const cashVsMomo = useMemo(() => {
     let cash = 0
     let momo = 0
 
-    sales.forEach(s => {
+    allSalesData.forEach(s => {
       const paid = Number(s.amount_paid) || 0
       if ((s.payment_method || 'cash') === 'momo') momo += paid
       else cash += paid
     })
 
-    payments.forEach(p => {
+    allPaymentsData.forEach(p => {
       const amt = Number(p.amount) || 0
       if ((p.payment_method || 'cash') === 'momo') momo += amt
       else cash += amt
@@ -138,7 +139,7 @@ export default function Dashboard() {
     })
 
     return { cash, momo }
-  }, [sales, payments, adjustments])
+  }, [allSalesData, allPaymentsData, adjustments])
 
   const perBiz = useMemo(() => {
     return BUSINESSES.map(b => {
@@ -211,13 +212,25 @@ export default function Dashboard() {
           </div>
 
           {/* Cash vs MoMo Balances */}
-          <div className="header-row" style={{ marginTop: '12px' }}>
+          <div className="header-row" style={{ marginTop: '16px' }}>
             <h3>Money Balances (Cash & MoMo)</h3>
-            <button className="btn small primary" onClick={addBalanceAdjustment}>+ Add / Adjust Funds</button>
           </div>
           <div className="cards">
-            <Stat label="💵 Cash in Hand" value={cashVsMomo.cash} tone="green" />
-            <Stat label="📱 MoMo (Mobile Money)" value={cashVsMomo.momo} tone="blue" />
+            <div className="stat green">
+              <div className="stat-label">💵 Cash in Hand</div>
+              <div className="stat-value">{money(cashVsMomo.cash)}</div>
+              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => addSpecificFund('cash')}>
+                💵 + Add Money to Cash
+              </button>
+            </div>
+
+            <div className="stat blue">
+              <div className="stat-label">📱 MoMo (Mobile Money)</div>
+              <div className="stat-value">{money(cashVsMomo.momo)}</div>
+              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => addSpecificFund('momo')}>
+                📱 + Add Money to MoMo
+              </button>
+            </div>
           </div>
 
           {/* Total Stock Valuation Section */}
