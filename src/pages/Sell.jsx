@@ -157,6 +157,36 @@ export default function Sell({ seller }) {
         />
       </div>
 
+      {/* Cart (Top Prominent Position so sellers see order grow immediately) */}
+      <div className="cart-container">
+        <div className="cart-header">
+          🛒 Current Order {cart.length > 0 ? `(${cart.length} items)` : '(Empty)'}
+          <span className="cart-total-badge">{money(total)}</span>
+        </div>
+        {cart.length === 0 ? (
+          <div className="cart-empty-notice">Tap any product below to add it to this sale receipt.</div>
+        ) : (
+          <div className="cart">
+            {cart.map(l => (
+              <div className="cartline" key={l.key}>
+                <div className="cl-name">{l.product_name}</div>
+                <div className="cl-qty-group">
+                  <button className="qty-btn" onClick={() => setQty(l.key, Math.max(0, l.quantity - 1))}>-</button>
+                  <input className="cl-qty" type="number" step="any" value={l.quantity}
+                    onChange={e => setQty(l.key, e.target.value)} />
+                  <button className="qty-btn" onClick={() => setQty(l.key, l.quantity + 1)}>+</button>
+                </div>
+                <span className="times">×</span>
+                <input className="cl-price" type="number" step="any" value={l.unit_price}
+                  onChange={e => setPrice(l.key, e.target.value)} />
+                <div className="cl-total">{money(l.quantity * l.unit_price)}</div>
+                <button className="cl-x" onClick={() => removeLine(l.key)}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="grid">
         {filteredProducts.length === 0 && <p className="muted">No products found.</p>}
         {filteredProducts.map(p => {
@@ -171,7 +201,7 @@ export default function Sell({ seller }) {
                 <div className="tierrow">
                   {tiers.map((t, i) => (
                     <button key={i} className="tierbtn" onClick={() => addLine(p, t)}>
-                      {t.label}<br /><small>{money(priceFor(p, t))}</small>
+                      + {t.label}<br /><small>{money(priceFor(p, t))}</small>
                     </button>
                   ))}
                 </div>
@@ -188,22 +218,6 @@ export default function Sell({ seller }) {
             </button>
           )
         })}
-      </div>
-
-      {/* Cart */}
-      <div className="cart">
-        {cart.map(l => (
-          <div className="cartline" key={l.key}>
-            <div className="cl-name">{l.product_name}</div>
-            <input className="cl-qty" type="number" step="any" value={l.quantity}
-              onChange={e => setQty(l.key, e.target.value)} />
-            <span className="times">×</span>
-            <input className="cl-price" type="number" step="any" value={l.unit_price}
-              onChange={e => setPrice(l.key, e.target.value)} />
-            <div className="cl-total">{money(l.quantity * l.unit_price)}</div>
-            <button className="cl-x" onClick={() => removeLine(l.key)}>✕</button>
-          </div>
-        ))}
       </div>
 
       {/* Checkout bar */}

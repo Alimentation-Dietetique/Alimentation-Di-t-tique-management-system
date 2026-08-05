@@ -9,6 +9,7 @@ export default function Products() {
   const [business, setBusiness] = useState('cantine')
   const [products, setProducts] = useState([])
   const [form, setForm] = useState(blank)
+  const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
   const biz = businessOf(business)
 
@@ -16,26 +17,58 @@ export default function Products() {
     const { data } = await supabase.from('products').select('*').eq('business', business).order('name')
     setProducts(data || [])
   }
-  useEffect(() => { load(); setForm({ ...blank, unit: biz.unit }) }, [business])
+  useEffect(() => { 
+    load()
+    setEditingId(null)
+    setForm({ ...blank, unit: biz.unit }) 
+  }, [business])
 
-  async function add() {
+  function startEdit(p) {
+    setEditingId(p.id)
+    setForm({
+      name: p.name,
+      unit: p.unit || biz.unit,
+      price_detail: p.price_detail ?? '',
+      price_supply: p.price_supply ?? '',
+      stock: p.stock ?? 0,
+      track_stock: p.track_stock,
+      tiers: p.price_tiers ? JSON.stringify(p.price_tiers) : '',
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setForm({ ...blank, unit: biz.unit })
+  }
+
+  async function save() {
     if (!form.name) return
     let price_tiers = null
     if (form.tiers.trim()) {
       try { price_tiers = JSON.parse(form.tiers) } catch { alert('Tiers must be valid JSON'); return }
     }
     setBusy(true)
-    const { error } = await supabase.from('products').insert({
+    const payload = {
       business, name: form.name, unit: form.unit,
       price_detail: Number(form.price_detail) || 0,
       price_supply: biz.hasSupply && form.price_supply !== '' ? Number(form.price_supply) : null,
       price_tiers,
       track_stock: form.track_stock,
       stock: Number(form.stock) || 0,
-    })
+    }
+
+    let res
+    if (editingId) {
+      res = await supabase.from('products').update(payload).eq('id', editingId)
+    } else {
+      res = await supabase.from('products').insert(payload)
+    }
+
     setBusy(false)
-    if (error) { alert(error.message); return }
-    setForm({ ...blank, unit: biz.unit }); load()
+    if (res.error) { alert(res.error.message); return }
+    cancelEdit()
+    load()
   }
 
   async function restock(p) {
@@ -63,15 +96,16 @@ export default function Products() {
       </div>
 
       <div className="card">
+        <h3>{editingId ? 'Edit Product' : 'Add New Product'}</h3>
         <label>Product name</label>
-        <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+        <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Tofu 1kg / Book Title" />
         <div className="row2">
           <div>
             <label>Unit</label>
             <input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} />
           </div>
           <div>
-            <label>Initial stock</label>
+            <label>Stock Quantity</label>
             <input type="number" step="any" value={form.stock} onChange={e => setForm({ ...form, stock: e.target.value })} />
           </div>
         </div>
@@ -98,7 +132,14 @@ export default function Products() {
           <input type="checkbox" checked={form.track_stock} onChange={e => setForm({ ...form, track_stock: e.target.checked })} />
           Track stock for this product
         </label>
-        <button className="btn primary" disabled={busy} onClick={add}>Add product</button>
+        <div className="payrow">
+          <button className="btn primary" disabled={busy} onClick={save}>
+            {editingId ? 'Save Changes' : 'Add product'}
+          </button>
+          {editingId && (
+            <button className="btn ghost" onClick={cancelEdit}>Cancel</button>
+          )}
+        </div>
       </div>
 
       <div className="list">
@@ -111,7 +152,8 @@ export default function Products() {
                 {p.track_stock ? ` · stock ${num(p.stock)}` : ' · not tracked'}
               </div>
             </div>
-            <button className="btn small" onClick={() => restock(p)}>+ Stock</button>
+            <button className="btn small" onClick={() => startEdit(p)}>✏️ Edit</button>
+            <button className="btn small ghost" onClick={() => restock(p)}>+ Stock</button>
             <button className="btn small ghost" onClick={() => toggleActive(p)}>{p.active ? 'Hide' : 'Show'}</button>
           </div>
         ))}
@@ -119,3 +161,4 @@ export default function Products() {
     </div>
   )
 }
+
