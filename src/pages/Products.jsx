@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { BUSINESSES, businessOf } from '../lib/businesses'
 import { money, num } from '../lib/format'
@@ -10,6 +10,7 @@ export default function Products() {
   const [products, setProducts] = useState([])
   const [form, setForm] = useState(blank)
   const [editingId, setEditingId] = useState(null)
+  const [tableSearch, setTableSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const biz = businessOf(business)
 
@@ -20,8 +21,15 @@ export default function Products() {
   useEffect(() => { 
     load()
     setEditingId(null)
+    setTableSearch('')
     setForm({ ...blank, unit: biz.unit }) 
   }, [business])
+
+  const filteredProducts = useMemo(() => {
+    if (!tableSearch.trim()) return products
+    const q = tableSearch.toLowerCase()
+    return products.filter(p => p.name.toLowerCase().includes(q) || (p.unit || '').toLowerCase().includes(q))
+  }, [products, tableSearch])
 
   function startEdit(p) {
     setEditingId(p.id)
@@ -76,6 +84,11 @@ export default function Products() {
     if (!qty) return
     const { error } = await supabase.rpc('restock_product', { p_product_id: p.id, p_qty: qty })
     if (error) { alert(error.message); return }
+    load()
+  }
+
+  async function toggleActive(p) {
+    await supabase.from('products').update({ active: !p.active }).eq('id', p.id)
     load()
   }
 
@@ -144,10 +157,21 @@ export default function Products() {
         </div>
       </div>
 
-      <h3>{biz.label} Product Table</h3>
+      <div className="header-row">
+        <h3>{biz.label} Product Table</h3>
+      </div>
+      
+      <input 
+        type="text" 
+        placeholder={`🔍 Search ${biz.label} stock table by name or unit...`} 
+        value={tableSearch} 
+        onChange={e => setTableSearch(e.target.value)} 
+        className="searchinput"
+      />
+
       <div className="table-responsive card">
-        {products.length === 0 ? (
-          <p className="muted">No products recorded for {biz.label} yet.</p>
+        {filteredProducts.length === 0 ? (
+          <p className="muted">No matching products found for {biz.label}.</p>
         ) : (
           <table className="data-table">
             <thead>
@@ -162,7 +186,7 @@ export default function Products() {
               </tr>
             </thead>
             <tbody>
-              {products.map(p => {
+              {filteredProducts.map(p => {
                 const isOutOfStock = p.track_stock && p.stock <= 0
                 const isLowStock = p.track_stock && p.stock > 0 && p.stock <= 5
                 return (
@@ -205,5 +229,6 @@ export default function Products() {
     </div>
   )
 }
+
 
 

@@ -10,6 +10,7 @@ export default function Expenses() {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [categorySearch, setCategorySearch] = useState('')
+  const [tableSearch, setTableSearch] = useState('')
   const [rows, setRows] = useState([])
   const [allCategories, setAllCategories] = useState([])
   const [editingId, setEditingId] = useState(null)
@@ -40,6 +41,16 @@ export default function Expenses() {
     const q = categorySearch.toLowerCase()
     return availableCategories.filter(c => c.toLowerCase().includes(q))
   }, [availableCategories, categorySearch])
+
+  const filteredExpenseRows = useMemo(() => {
+    if (!tableSearch.trim()) return rows
+    const q = tableSearch.toLowerCase()
+    return rows.filter(r => 
+      (r.category || '').toLowerCase().includes(q) || 
+      (r.business || 'overall').toLowerCase().includes(q) || 
+      (r.note || '').toLowerCase().includes(q)
+    )
+  }, [rows, tableSearch])
 
   useEffect(() => {
     if (!editingId) {
@@ -158,10 +169,21 @@ export default function Expenses() {
         </div>
       </div>
 
-      <h3>Expense Log Table</h3>
+      <div className="header-row">
+        <h3>Expense Log Table</h3>
+      </div>
+
+      <input 
+        type="text" 
+        placeholder="🔍 Search expense table by category, business or note..." 
+        value={tableSearch} 
+        onChange={e => setTableSearch(e.target.value)} 
+        className="searchinput"
+      />
+
       <div className="table-responsive card">
-        {rows.length === 0 ? (
-          <p className="muted">No expenses recorded yet.</p>
+        {filteredExpenseRows.length === 0 ? (
+          <p className="muted">No matching expenses found.</p>
         ) : (
           <table className="data-table">
             <thead>
@@ -175,7 +197,7 @@ export default function Expenses() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
+              {filteredExpenseRows.map(r => (
                 <tr key={r.id}>
                   <td className="small muted">{new Date(r.created_at).toLocaleDateString()}</td>
                   <td>
@@ -199,5 +221,6 @@ export default function Expenses() {
     </div>
   )
 }
+
 
 

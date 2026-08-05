@@ -14,6 +14,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState([])
   const [payments, setPayments] = useState([])
   const [adjustments, setAdjustments] = useState([])
+  const [salesSearch, setSalesSearch] = useState('')
   const [debtTotal, setDebtTotal] = useState(0)
   const [loading, setLoading] = useState(true)
 
@@ -44,6 +45,18 @@ export default function Dashboard() {
     setLoading(false)
   }
   useEffect(() => { load() }, [range])
+
+  const filteredSales = useMemo(() => {
+    if (!salesSearch.trim()) return sales
+    const q = salesSearch.toLowerCase()
+    return sales.filter(s => 
+      (s.customers?.name || '').toLowerCase().includes(q) || 
+      (s.business || '').toLowerCase().includes(q) || 
+      (s.payment_method || 'cash').toLowerCase().includes(q) || 
+      (s.seller || '').toLowerCase().includes(q)
+    )
+  }, [sales, salesSearch])
+
 
   async function deleteSaleTransaction(sale) {
     if (!confirm(`Cancel/Delete sale receipt #${sale.id.slice(0, 8)} of ${money(sale.total)}?\n(This will restore product stock quantity).`)) return
@@ -260,10 +273,21 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
 
-          <h3>Sales Transactions Table</h3>
+          <div className="header-row">
+            <h3>Sales Transactions Table</h3>
+          </div>
+
+          <input 
+            type="text" 
+            placeholder="🔍 Search sales by customer name, business, payment method or seller..." 
+            value={salesSearch} 
+            onChange={e => setSalesSearch(e.target.value)} 
+            className="searchinput"
+          />
+
           <div className="table-responsive card">
-            {sales.length === 0 ? (
-              <p className="muted">No sales transactions in this period.</p>
+            {filteredSales.length === 0 ? (
+              <p className="muted">No matching sales transactions found in this period.</p>
             ) : (
               <table className="data-table">
                 <thead>
@@ -279,7 +303,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sales.map(s => {
+                  {filteredSales.map(s => {
                     const debt = Math.max(0, s.total - s.amount_paid)
                     return (
                       <tr key={s.id}>
