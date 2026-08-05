@@ -79,11 +79,25 @@ export default function Products() {
     load()
   }
 
-  async function restock(p) {
-    const qty = Number(prompt(`Add stock to "${p.name}" (current ${num(p.stock)} ${p.unit})`, ''))
-    if (!qty) return
-    const { error } = await supabase.rpc('restock_product', { p_product_id: p.id, p_qty: qty })
+  const [restockingProd, setRestockingProd] = useState(null)
+  const [restockQty, setRestockQty] = useState('')
+  const [deletingProd, setDeletingProd] = useState(null)
+
+  async function saveRestock() {
+    if (!restockingProd) return
+    const qty = Number(restockQty)
+    if (!qty || isNaN(qty)) {
+      alert('Please enter a valid stock quantity.')
+      return
+    }
+
+    setBusy(true)
+    const { error } = await supabase.rpc('restock_product', { p_product_id: restockingProd.id, p_qty: qty })
+    setBusy(false)
     if (error) { alert(error.message); return }
+
+    setRestockingProd(null)
+    setRestockQty('')
     load()
   }
 
@@ -92,10 +106,14 @@ export default function Products() {
     load()
   }
 
-  async function deleteProduct(p) {
-    if (!confirm(`Are you sure you want to delete "${p.name}"?`)) return
-    const { error } = await supabase.from('products').delete().eq('id', p.id)
+  async function confirmDeleteProduct() {
+    if (!deletingProd) return
+    setBusy(true)
+    const { error } = await supabase.from('products').delete().eq('id', deletingProd.id)
+    setBusy(false)
     if (error) { alert(error.message); return }
+
+    setDeletingProd(null)
     load()
   }
 
@@ -214,9 +232,9 @@ export default function Products() {
                     <td>
                       <div className="actions-cell">
                         <button className="btn small" title="Edit Product" onClick={() => startEdit(p)}>✏️ Edit</button>
-                        <button className="btn small ghost" title="Restock" onClick={() => restock(p)}>+ Stock</button>
+                        <button className="btn small ghost" title="Restock" onClick={() => { setRestockingProd(p); setRestockQty(''); }}>+ Stock</button>
                         <button className="btn small ghost" title="Toggle Visibility" onClick={() => toggleActive(p)}>{p.active ? 'Hide' : 'Show'}</button>
-                        <button className="btn small red-btn" title="Delete Product" onClick={() => deleteProduct(p)}>🗑️</button>
+                        <button className="btn small red-btn" title="Delete Product" onClick={() => setDeletingProd(p)}>🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -226,9 +244,53 @@ export default function Products() {
           </table>
         )}
       </div>
+
+      {/* Modal: Restock Product */}
+      {restockingProd && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3>+ Restock Product</h3>
+            <p className="small muted">Product: <strong>{restockingProd.name}</strong> (Current stock: {num(restockingProd.stock)} {restockingProd.unit})</p>
+
+            <label>Quantity to Add</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={restockQty} 
+              onChange={e => setRestockQty(e.target.value)} 
+              placeholder="e.g. 10 or 50" 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={busy || !restockQty} onClick={saveRestock}>
+                {busy ? 'Restocking...' : 'Add Stock'}
+              </button>
+              <button className="btn ghost" onClick={() => setRestockingProd(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Product Confirmation */}
+      {deletingProd && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3 style={{ color: 'var(--red)' }}>🗑️ Delete Product?</h3>
+            <p className="small">Are you sure you want to permanently delete <strong>{deletingProd.name}</strong>?</p>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn red-btn" disabled={busy} onClick={confirmDeleteProduct}>
+                {busy ? 'Deleting...' : 'Yes, Delete Product'}
+              </button>
+              <button className="btn ghost" onClick={() => setDeletingProd(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 
 

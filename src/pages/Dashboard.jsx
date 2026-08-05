@@ -64,40 +64,63 @@ export default function Dashboard() {
   }, [sales, salesSearch])
 
 
-  async function deleteSaleTransaction(sale) {
-    if (!confirm(`Cancel/Delete sale receipt #${sale.id.slice(0, 8)} of ${money(sale.total)}?\n(This will restore product stock quantity).`)) return
-    setLoading(true)
-    const { error } = await supabase.rpc('delete_sale', { p_sale_id: sale.id })
-    if (error) { alert('Could not delete: ' + error.message); setLoading(false); return }
+  const [deletingSale, setDeletingSale] = useState(null)
+  const [editingSale, setEditingSale] = useState(null)
+  const [editPaidInput, setEditPaidInput] = useState('')
+
+  const [fundModal, setFundModal] = useState(null) // 'cash' | 'momo' | null
+  const [fundForm, setFundForm] = useState({ amount: '', reason: 'Float deposit' })
+  const [saving, setSaving] = useState(false)
+
+  async function confirmDeleteSale() {
+    if (!deletingSale) return
+    setSaving(true)
+    const { error } = await supabase.rpc('delete_sale', { p_sale_id: deletingSale.id })
+    setSaving(false)
+    if (error) { alert('Could not delete: ' + error.message); return }
+
+    setDeletingSale(null)
     load()
   }
 
-  async function editSalePayment(sale) {
-    const input = prompt(`Update amount paid for sale #${sale.id.slice(0, 8)} (Total: ${money(sale.total)}):`, sale.amount_paid)
-    if (input == null) return
-    const newPaid = Number(input)
-    if (isNaN(newPaid) || newPaid < 0) return
-    const { error } = await supabase.from('sales').update({ amount_paid: newPaid }).eq('id', sale.id)
+  function startEditSale(sale) {
+    setEditingSale(sale)
+    setEditPaidInput(sale.amount_paid ?? '')
+  }
+
+  async function saveEditSale() {
+    if (!editingSale) return
+    const newPaid = Number(editPaidInput)
+    if (isNaN(newPaid) || newPaid < 0) {
+      alert('Please enter a valid amount paid.')
+      return
+    }
+
+    setSaving(true)
+    const { error } = await supabase.from('sales').update({ amount_paid: newPaid }).eq('id', editingSale.id)
+    setSaving(false)
     if (error) { alert(error.message); return }
+
+    setEditingSale(null)
     load()
   }
 
-  async function addSpecificFund(method) {
-    const label = method === 'momo' ? 'Mobile Money (MoMo)' : 'Cash in Hand'
-    const input = prompt(`Add / Deposit money to ${label}:\n(Enter positive amount to add, or negative e.g. -5000 to withdraw):`, '10000')
-    if (input == null) return
-    const amt = Number(input)
-    if (isNaN(amt) || amt === 0) return
+  async function saveFundDeposit() {
+    if (!fundModal) return
+    const amt = Number(fundForm.amount)
+    if (!amt || isNaN(amt)) return
 
-    const reason = prompt(`Reason for ${label} addition (optional)?`, 'Float deposit') || 'Manual deposit'
-
+    setSaving(true)
     const { error } = await supabase.from('balance_adjustments').insert({
-      payment_method: method,
+      payment_method: fundModal,
       amount: amt,
-      reason,
+      reason: fundForm.reason || 'Manual deposit',
     })
-
+    setSaving(false)
     if (error) { alert(error.message); return }
+
+    setFundModal(null)
+    setFundForm({ amount: '', reason: 'Float deposit' })
     load()
   }
 
@@ -221,7 +244,7 @@ export default function Dashboard() {
             <div className="stat green">
               <div className="stat-label">💵 Cash in Hand</div>
               <div className="stat-value">{money(cashVsMomo.cash)}</div>
-              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => addSpecificFund('cash')}>
+              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => setFundModal('cash')}>
                 💵 + Add Money to Cash
               </button>
             </div>
@@ -229,7 +252,7 @@ export default function Dashboard() {
             <div className="stat blue">
               <div className="stat-label">📱 MoMo (Mobile Money)</div>
               <div className="stat-value">{money(cashVsMomo.momo)}</div>
-              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => addSpecificFund('momo')}>
+              <button className="btn small primary" style={{ marginTop: '8px', width: '100%' }} onClick={() => setFundModal('momo')}>
                 📱 + Add Money to MoMo
               </button>
             </div>
@@ -341,8 +364,8 @@ export default function Dashboard() {
                         </td>
                         <td>
                           <div className="actions-cell">
-                            <button className="btn small" title="Edit Amount Paid" onClick={() => editSalePayment(s)}>✏️ Edit</button>
-                            <button className="btn small red-btn" title="Delete/Cancel Sale (Restores Stock)" onClick={() => deleteSaleTransaction(s)}>🗑️ Delete</button>
+                            <button className="btn small" title="Edit Amount Paid" onClick={() => startEditSale(s)}>✏️ Edit</button>
+                            <button className="btn small red-btn" title="Delete/Cancel Sale (Restores Stock)" onClick={() => setDeletingSale(s)}>🗑️ Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -354,9 +377,86 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {/* Modal: Edit Sale Amount Paid */}
+      {editingSale && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3>✏️ Edit Amount Paid</h3>
+            <p className="small muted">Sale Receipt #{editingSale.id.slice(0, 8)} · Total: <strong>{money(editingSale.total)}</strong></p>
+
+            <label>Amount Paid</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={editPaidInput} 
+              onChange={e => setEditPaidInput(e.target.value)} 
+              placeholder="Enter amount..." 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving} onClick={saveEditSale}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button className="btn ghost" onClick={() => setEditingSale(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Delete Sale Confirmation */}
+      {deletingSale && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3 style={{ color: 'var(--red)' }}>🗑️ Cancel & Delete Sale?</h3>
+            <p className="small">Are you sure you want to delete sale receipt <strong>#{deletingSale.id.slice(0, 8)}</strong> ({money(deletingSale.total)})?</p>
+            <p className="small muted">This action will automatically restore product stock quantity.</p>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn red-btn" disabled={saving} onClick={confirmDeleteSale}>
+                {saving ? 'Deleting...' : 'Yes, Delete & Restore Stock'}
+              </button>
+              <button className="btn ghost" onClick={() => setDeletingSale(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Deposit Fund */}
+      {fundModal && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3>{fundModal === 'momo' ? '📱 Add Money to MoMo' : '💵 Add Money to Cash in Hand'}</h3>
+            <label>Amount to Deposit / Adjust</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={fundForm.amount} 
+              onChange={e => setFundForm({ ...fundForm, amount: e.target.value })} 
+              placeholder="Enter amount..." 
+            />
+
+            <label>Reason / Note (optional)</label>
+            <input 
+              type="text" 
+              value={fundForm.reason} 
+              onChange={e => setFundForm({ ...fundForm, reason: e.target.value })} 
+              placeholder="e.g. Float deposit, Cash additions" 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving || !fundForm.amount} onClick={saveFundDeposit}>
+                {saving ? 'Saving...' : 'Confirm Deposit'}
+              </button>
+              <button className="btn ghost" onClick={() => setFundModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 function Stat({ label, value, tone }) {
   return (

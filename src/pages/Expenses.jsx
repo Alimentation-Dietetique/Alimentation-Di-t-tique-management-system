@@ -109,10 +109,16 @@ export default function Expenses() {
     load()
   }
 
-  async function deleteExpense(r) {
-    if (!confirm(`Delete expense "${r.category}" of ${money(r.amount)}?`)) return
-    const { error } = await supabase.from('expenses').delete().eq('id', r.id)
+  const [deletingExpense, setDeletingExpense] = useState(null)
+
+  async function confirmDeleteExpense() {
+    if (!deletingExpense) return
+    setBusy(true)
+    const { error } = await supabase.from('expenses').delete().eq('id', deletingExpense.id)
+    setBusy(false)
     if (error) { alert(error.message); return }
+
+    setDeletingExpense(null)
     load()
   }
 
@@ -209,7 +215,7 @@ export default function Expenses() {
                   <td>
                     <div className="actions-cell">
                       <button className="btn small" title="Edit Expense" onClick={() => startEdit(r)}>✏️</button>
-                      <button className="btn small red-btn" title="Delete Expense" onClick={() => deleteExpense(r)}>🗑️</button>
+                      <button className="btn small red-btn" title="Delete Expense" onClick={() => setDeletingExpense(r)}>🗑️</button>
                     </div>
                   </td>
                 </tr>
@@ -218,9 +224,27 @@ export default function Expenses() {
           </table>
         )}
       </div>
+
+      {/* Modal: Delete Expense Confirmation */}
+      {deletingExpense && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3 style={{ color: 'var(--red)' }}>🗑️ Delete Expense?</h3>
+            <p className="small">Are you sure you want to delete expense <strong>"{deletingExpense.category}"</strong> of <strong>{money(deletingExpense.amount)}</strong>?</p>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn red-btn" disabled={busy} onClick={confirmDeleteExpense}>
+                {busy ? 'Deleting...' : 'Yes, Delete Expense'}
+              </button>
+              <button className="btn ghost" onClick={() => setDeletingExpense(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 
 

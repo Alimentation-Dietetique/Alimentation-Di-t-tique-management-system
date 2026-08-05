@@ -7,6 +7,10 @@ export default function Debts() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [editingDebt, setEditingDebt] = useState(null)
+  const [payingDebt, setPayingDebt] = useState(null)
+  const [deletingDebt, setDeletingDebt] = useState(null)
+
+  const [payForm, setPayForm] = useState({ amount: '', payment_method: 'cash' })
   const [editForm, setEditForm] = useState({ name: '', phone: '', amount_paid: '' })
   const [saving, setSaving] = useState(false)
 
@@ -24,21 +28,29 @@ export default function Debts() {
   }
   useEffect(() => { load() }, [])
 
-  async function pay(sale) {
-    const input = prompt(`Payment for ${sale.customers?.name || 'customer'} — owes ${money(sale.outstanding)}.\nAmount received:`, sale.outstanding)
-    if (input == null) return
-    const amount = Number(input)
-    if (!amount || amount <= 0) return
+  function startPay(sale) {
+    setPayingDebt(sale)
+    setPayForm({ amount: sale.outstanding, payment_method: 'cash' })
+  }
 
-    const methodChoice = prompt(`Payment method?\nType 'cash' for Cash, or 'momo' for Mobile Money:`, 'cash')
-    const payment_method = (methodChoice && methodChoice.toLowerCase().includes('momo')) ? 'momo' : 'cash'
+  async function savePay() {
+    if (!payingDebt) return
+    const amt = Number(payForm.amount)
+    if (!amt || amt <= 0) {
+      alert('Please enter a valid payment amount.')
+      return
+    }
 
+    setSaving(true)
     const { error } = await supabase.rpc('record_payment', { 
-      p_sale_id: sale.id, 
-      p_amount: amount, 
-      p_payment_method: payment_method 
+      p_sale_id: payingDebt.id, 
+      p_amount: amt, 
+      p_payment_method: payForm.payment_method 
     })
+    setSaving(false)
     if (error) { alert(error.message); return }
+
+    setPayingDebt(null)
     load()
   }
 
@@ -99,11 +111,14 @@ export default function Debts() {
     load()
   }
 
-  async function deleteDebt(sale) {
-    if (!confirm(`Delete/Cancel debt record for ${sale.customers?.name || 'Customer'} of ${money(sale.total)}?\n(This will restore product stock quantity).`)) return
-    setLoading(true)
-    const { error } = await supabase.rpc('delete_sale', { p_sale_id: sale.id })
-    if (error) { alert('Could not delete: ' + error.message); setLoading(false); return }
+  async function confirmDeleteDebt() {
+    if (!deletingDebt) return
+    setSaving(true)
+    const { error } = await supabase.rpc('delete_sale', { p_sale_id: deletingDebt.id })
+    setSaving(false)
+    if (error) { alert('Could not delete: ' + error.message); return }
+
+    setDeletingDebt(null)
     load()
   }
 
@@ -202,14 +217,14 @@ export default function Debts() {
                     <td><span className="badge owe">{money(r.outstanding)}</span></td>
                     <td>
                       <div className="actions-cell">
-                        <button className="btn small primary" title="Record Debt Payment" onClick={() => pay(r)}>💳 Pay</button>
+                        <button className="btn small primary" title="Record Debt Payment" onClick={() => startPay(r)}>💳 Pay</button>
                         <button className="btn small" title="Edit Debt Record & Customer Info" onClick={() => startEdit(r)}>✏️ Edit</button>
                         {waUrl && (
                           <a className="btn small whatsapp-btn" href={waUrl} target="_blank" rel="noreferrer" title="Send WhatsApp Reminder">
                             💬 WA
                           </a>
                         )}
-                        <button className="btn small red-btn" title="Delete Debt Sale (Restores Stock)" onClick={() => deleteDebt(r)}>🗑️</button>
+                        <button className="btn small red-btn" title="Delete Debt Sale (Restores Stock)" onClick={() => setDeletingDebt(r)}>🗑️</button>
                       </div>
                     </td>
                   </tr>
@@ -220,7 +235,39 @@ export default function Debts() {
         </div>
       )}
 
-      {/* Edit Debt & Customer Modal */}
+      {/* Custom Modal: Record Debt Payment */}
+      {payingDebt && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '420px', margin: '0 auto' }}>
+            <h3>💳 Record Debt Payment</h3>
+            <p className="small muted">Customer: <strong>{payingDebt.customers?.name || 'Walk-in'}</strong> · Owes: <span className="debt-text">{money(payingDebt.outstanding)}</span></p>
+
+            <label>Amount Received</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={payForm.amount} 
+              onChange={e => setPayForm({ ...payForm, amount: e.target.value })} 
+              placeholder="Enter amount..." 
+            />
+
+            <label className="pay-label" style={{ marginTop: '10px' }}>Payment Method:</label>
+            <div className="segmented">
+              <button className={payForm.payment_method === 'cash' ? 'active' : ''} onClick={() => setPayForm({ ...payForm, payment_method: 'cash' })}>💵 Cash</button>
+              <button className={payForm.payment_method === 'momo' ? 'active' : ''} onClick={() => setPayForm({ ...payForm, payment_method: 'momo' })}>📱 MoMo</button>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving} onClick={savePay}>
+                {saving ? 'Recording...' : 'Confirm Payment'}
+              </button>
+              <button className="btn ghost" onClick={() => setPayingDebt(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Modal: Edit Debt & Customer Details */}
       {editingDebt && (
         <div className="modal-overlay">
           <div className="modal-content card" style={{ maxWidth: '440px', margin: '0 auto' }}>
@@ -265,9 +312,30 @@ export default function Debts() {
           </div>
         </div>
       )}
+
+      {/* Custom Modal: Delete Debt Confirmation */}
+      {deletingDebt && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3 style={{ color: 'var(--red)' }}>🗑️ Cancel & Delete Debt?</h3>
+            <p className="small">
+              Are you sure you want to cancel and delete the debt receipt for <strong>{deletingDebt.customers?.name || 'Walk-in'}</strong> ({money(deletingDebt.total)})?
+            </p>
+            <p className="small muted">This action will automatically restore product stock quantity.</p>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn red-btn" disabled={saving} onClick={confirmDeleteDebt}>
+                {saving ? 'Deleting...' : 'Yes, Delete & Restore Stock'}
+              </button>
+              <button className="btn ghost" onClick={() => setDeletingDebt(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 
 

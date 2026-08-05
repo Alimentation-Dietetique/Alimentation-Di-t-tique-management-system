@@ -95,12 +95,46 @@ export default function Sell({ seller }) {
     return products.filter(p => p.name.toLowerCase().includes(s))
   }, [products, search])
 
-  async function quickAddCustomer() {
-    const name = prompt('Customer name?')
-    if (!name) return
-    const phone = prompt('Phone (optional)?') || null
-    const { data, error } = await supabase.from('customers').insert({ name, phone }).select().single()
-    if (!error && data) { await loadCustomers(); setCustomerId(data.id) }
+  const [showCustModal, setShowCustModal] = useState(false)
+  const [custForm, setCustForm] = useState({ name: '', phone: '' })
+
+  const [fundModal, setFundModal] = useState(null) // 'cash' | 'momo' | null
+  const [fundForm, setFundForm] = useState({ amount: '', reason: 'Float deposit' })
+
+  async function saveQuickCustomer() {
+    if (!custForm.name.trim()) return
+    setSaving(true)
+    const { data, error } = await supabase.from('customers').insert({ 
+      name: custForm.name.trim(), 
+      phone: custForm.phone.trim() || null 
+    }).select().single()
+    setSaving(false)
+    if (!error && data) { 
+      await loadCustomers()
+      setCustomerId(data.id)
+      setShowCustModal(false)
+      setCustForm({ name: '', phone: '' })
+    }
+  }
+
+  async function saveFundDeposit() {
+    if (!fundModal) return
+    const amt = Number(fundForm.amount)
+    if (!amt || isNaN(amt)) return
+
+    setSaving(true)
+    const label = fundModal === 'momo' ? 'Mobile Money (MoMo)' : 'Cash in Hand'
+    const { error } = await supabase.from('balance_adjustments').insert({
+      payment_method: fundModal,
+      amount: amt,
+      reason: fundForm.reason || 'Manual deposit',
+    })
+    setSaving(false)
+    if (error) { alert(error.message); return }
+
+    setFundModal(null)
+    setFundForm({ amount: '', reason: 'Float deposit' })
+    setFlash(`${label} updated ✓`); setTimeout(() => setFlash(''), 1500)
   }
 
   async function complete() {
@@ -274,7 +308,7 @@ export default function Sell({ seller }) {
             <option value="">Walk-in (no customer)</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <button className="btn ghost" onClick={quickAddCustomer}>+ Customer</button>
+          <button className="btn ghost" onClick={() => setShowCustModal(true)}>+ Customer</button>
         </div>
 
         <div className="payrow">
@@ -284,8 +318,8 @@ export default function Sell({ seller }) {
             <button className={paymentMethod === 'momo' ? 'active' : ''} onClick={() => setPaymentMethod('momo')}>📱 MoMo</button>
           </div>
           <div className="quick-fund-actions">
-            <button className="btn small ghost" title="Deposit Float Money into Cash" onClick={() => addSpecificFund('cash')}>💵 + Cash Fund</button>
-            <button className="btn small ghost" title="Deposit Float Money into MoMo" onClick={() => addSpecificFund('momo')}>📱 + MoMo Fund</button>
+            <button className="btn small ghost" title="Deposit Float Money into Cash" onClick={() => setFundModal('cash')}>💵 + Cash Fund</button>
+            <button className="btn small ghost" title="Deposit Float Money into MoMo" onClick={() => setFundModal('momo')}>📱 + MoMo Fund</button>
           </div>
         </div>
 
@@ -378,7 +412,70 @@ export default function Sell({ seller }) {
           </div>
         </div>
       )}
+      {/* Modal: Quick Add Customer */}
+      {showCustModal && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3>👤 Add New Customer</h3>
+            <label>Customer Name</label>
+            <input 
+              type="text" 
+              value={custForm.name} 
+              onChange={e => setCustForm({ ...custForm, name: e.target.value })} 
+              placeholder="e.g. Jean Paul" 
+            />
+
+            <label>Phone Number (optional)</label>
+            <input 
+              type="text" 
+              value={custForm.phone} 
+              onChange={e => setCustForm({ ...custForm, phone: e.target.value })} 
+              placeholder="e.g. +250 788 123 456" 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving || !custForm.name.trim()} onClick={saveQuickCustomer}>
+                {saving ? 'Saving...' : 'Save & Select Customer'}
+              </button>
+              <button className="btn ghost" onClick={() => setShowCustModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Deposit / Adjust Fund Balance */}
+      {fundModal && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '400px', margin: '0 auto' }}>
+            <h3>{fundModal === 'momo' ? '📱 Add Money to MoMo' : '💵 Add Money to Cash in Hand'}</h3>
+            <label>Amount to Deposit / Adjust</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={fundForm.amount} 
+              onChange={e => setFundForm({ ...fundForm, amount: e.target.value })} 
+              placeholder="Enter amount..." 
+            />
+
+            <label>Reason / Note (optional)</label>
+            <input 
+              type="text" 
+              value={fundForm.reason} 
+              onChange={e => setFundForm({ ...fundForm, reason: e.target.value })} 
+              placeholder="e.g. Float deposit, Cash additions" 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving || !fundForm.amount} onClick={saveFundDeposit}>
+                {saving ? 'Saving...' : 'Confirm Deposit'}
+              </button>
+              <button className="btn ghost" onClick={() => setFundModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
