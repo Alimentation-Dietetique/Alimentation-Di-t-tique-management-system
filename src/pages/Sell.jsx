@@ -39,8 +39,23 @@ export default function Sell({ seller }) {
   }
 
   function addLine(p, tier) {
+    if (p.track_stock && p.stock <= 0) {
+      alert(`"${p.name}" is out of stock! Cannot sell this item.`)
+      return
+    }
     const qty = tier ? Number(tier.qty) : 1
     const unit = tier ? priceFor(p, tier) / qty : priceFor(p, null)
+
+    // Check existing cart quantity for this product
+    const existingInCart = cart
+      .filter(l => l.product_id === p.id)
+      .reduce((sum, l) => sum + l.quantity, 0)
+
+    if (p.track_stock && (existingInCart + qty) > p.stock) {
+      alert(`Cannot add ${qty} ${p.unit}. Only ${p.stock - existingInCart} left in stock for "${p.name}".`)
+      return
+    }
+
     setCart(prev => {
       const key = p.id + '|' + unit + '|' + (tier?.label || '')
       const i = prev.findIndex(l => l.key === key)
@@ -191,16 +206,18 @@ export default function Sell({ seller }) {
         {filteredProducts.length === 0 && <p className="muted">No products found.</p>}
         {filteredProducts.map(p => {
           const tiers = Array.isArray(p.price_tiers) ? p.price_tiers : null
-          const isLowStock = p.track_stock && p.stock <= 5
+          const isOutOfStock = p.track_stock && p.stock <= 0
+          const isLowStock = p.track_stock && p.stock > 0 && p.stock <= 5
           if (tiers && tiers.length) {
             return (
-              <div key={p.id} className="prodcard">
+              <div key={p.id} className={`prodcard ${isOutOfStock ? 'disabled-card' : ''}`}>
                 <div className="prodname">
-                  {p.name} {isLowStock && <span className="lowbadge">Low</span>}
+                  {p.name} 
+                  {isOutOfStock ? <span className="outofstockbadge">Out of Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
                 </div>
                 <div className="tierrow">
                   {tiers.map((t, i) => (
-                    <button key={i} className="tierbtn" onClick={() => addLine(p, t)}>
+                    <button key={i} className="tierbtn" disabled={isOutOfStock} onClick={() => addLine(p, t)}>
                       + {t.label}<br /><small>{money(priceFor(p, t))}</small>
                     </button>
                   ))}
@@ -209,12 +226,17 @@ export default function Sell({ seller }) {
             )
           }
           return (
-            <button key={p.id} className="prodcard tap" onClick={() => addLine(p, null)}>
+            <button key={p.id} className={`prodcard tap ${isOutOfStock ? 'disabled-card' : ''}`} disabled={isOutOfStock} onClick={() => addLine(p, null)}>
               <div className="prodname">
-                {p.name} {isLowStock && <span className="lowbadge">Low</span>}
+                {p.name} 
+                {isOutOfStock ? <span className="outofstockbadge">Out of Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
               </div>
               <div className="prodprice">{money(priceFor(p, null))}</div>
-              {p.track_stock && <div className={`prodstock ${isLowStock ? 'warn' : ''}`}>stock: {num(p.stock)}</div>}
+              {p.track_stock && (
+                <div className={`prodstock ${isOutOfStock ? 'danger' : isLowStock ? 'warn' : ''}`}>
+                  {isOutOfStock ? 'Out of stock' : `stock: ${num(p.stock)}`}
+                </div>
+              )}
             </button>
           )
         })}

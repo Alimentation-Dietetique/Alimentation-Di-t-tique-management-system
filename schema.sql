@@ -192,6 +192,29 @@ end;
 $$;
 
 -- =====================================================================
+--  RPC: cancel / delete a sale and restore stock
+-- =====================================================================
+create or replace function delete_sale(p_sale_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_item record;
+begin
+  for v_item in select product_id, quantity from sale_items where sale_id = p_sale_id loop
+    if v_item.product_id is not null then
+      update products set stock = stock + v_item.quantity where id = v_item.product_id and track_stock = true;
+      insert into stock_movements (product_id, change, reason, note)
+      values (v_item.product_id, v_item.quantity, 'adjustment', 'Sale cancelled/deleted');
+    end if;
+  end loop;
+
+  delete from sales where id = p_sale_id;
+end;
+$$;
+
+-- =====================================================================
 --  Row Level Security — internal tool, any signed-in user has full access
 -- =====================================================================
 alter table products        enable row level security;
@@ -215,3 +238,5 @@ end $$;
 grant execute on function create_sale(jsonb)                  to authenticated;
 grant execute on function record_payment(uuid, numeric, text) to authenticated;
 grant execute on function restock_product(uuid, numeric, text) to authenticated;
+grant execute on function delete_sale(uuid)                  to authenticated;
+

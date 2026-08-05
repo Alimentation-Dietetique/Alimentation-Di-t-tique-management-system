@@ -79,8 +79,10 @@ export default function Products() {
     load()
   }
 
-  async function toggleActive(p) {
-    await supabase.from('products').update({ active: !p.active }).eq('id', p.id)
+  async function deleteProduct(p) {
+    if (!confirm(`Are you sure you want to delete "${p.name}"?`)) return
+    const { error } = await supabase.from('products').delete().eq('id', p.id)
+    if (error) { alert(error.message); return }
     load()
   }
 
@@ -142,23 +144,66 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="list">
-        {products.map(p => (
-          <div className="listrow" key={p.id} style={{ opacity: p.active ? 1 : 0.5 }}>
-            <div>
-              <div className="strong">{p.name}</div>
-              <div className="muted small">
-                {money(p.price_detail)}{p.price_supply != null ? ` / ${money(p.price_supply)}` : ''} · {p.unit}
-                {p.track_stock ? ` · stock ${num(p.stock)}` : ' · not tracked'}
-              </div>
-            </div>
-            <button className="btn small" onClick={() => startEdit(p)}>✏️ Edit</button>
-            <button className="btn small ghost" onClick={() => restock(p)}>+ Stock</button>
-            <button className="btn small ghost" onClick={() => toggleActive(p)}>{p.active ? 'Hide' : 'Show'}</button>
-          </div>
-        ))}
+      <h3>{biz.label} Product Table</h3>
+      <div className="table-responsive card">
+        {products.length === 0 ? (
+          <p className="muted">No products recorded for {biz.label} yet.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>Unit</th>
+                <th>Detail Price</th>
+                {biz.hasSupply && <th>Supply Price</th>}
+                <th>Current Stock</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map(p => {
+                const isOutOfStock = p.track_stock && p.stock <= 0
+                const isLowStock = p.track_stock && p.stock > 0 && p.stock <= 5
+                return (
+                  <tr key={p.id} style={{ opacity: p.active ? 1 : 0.5 }}>
+                    <td className="strong">{p.name}</td>
+                    <td>{p.unit}</td>
+                    <td>{money(p.price_detail)}</td>
+                    {biz.hasSupply && <td>{p.price_supply != null ? money(p.price_supply) : '—'}</td>}
+                    <td>
+                      {!p.track_stock ? (
+                        <span className="muted">Not tracked</span>
+                      ) : isOutOfStock ? (
+                        <span className="badge outofstock">0 (Out of stock)</span>
+                      ) : isLowStock ? (
+                        <span className="badge lowstock">{num(p.stock)} {p.unit}</span>
+                      ) : (
+                        <span className="badge instock">{num(p.stock)} {p.unit}</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`status-pill ${p.active ? 'active' : 'hidden'}`}>
+                        {p.active ? 'Active' : 'Hidden'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="actions-cell">
+                        <button className="btn small" title="Edit Product" onClick={() => startEdit(p)}>✏️ Edit</button>
+                        <button className="btn small ghost" title="Restock" onClick={() => restock(p)}>+ Stock</button>
+                        <button className="btn small ghost" title="Toggle Visibility" onClick={() => toggleActive(p)}>{p.active ? 'Hide' : 'Show'}</button>
+                        <button className="btn small red-btn" title="Delete Product" onClick={() => deleteProduct(p)}>🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
 }
+
 

@@ -17,7 +17,7 @@ export default function Dashboard() {
   async function load() {
     setLoading(true)
     const start = rangeStart(range)
-    let sq = supabase.from('sales').select('business,total,amount_paid,created_at')
+    let sq = supabase.from('sales').select('id,business,total,amount_paid,created_at,seller,customers(name)').order('created_at', { ascending: false })
     let eq = supabase.from('expenses').select('business,amount,created_at')
     if (start) { sq = sq.gte('created_at', start.toISOString()); eq = eq.gte('created_at', start.toISOString()) }
     const [{ data: s }, { data: e }] = await Promise.all([sq, eq])
@@ -29,6 +29,24 @@ export default function Dashboard() {
     setLoading(false)
   }
   useEffect(() => { load() }, [range])
+
+  async function deleteSaleTransaction(sale) {
+    if (!confirm(`Cancel/Delete sale receipt #${sale.id.slice(0, 8)} of ${money(sale.total)}?\n(This will restore product stock quantity).`)) return
+    setLoading(true)
+    const { error } = await supabase.rpc('delete_sale', { p_sale_id: sale.id })
+    if (error) { alert('Could not delete: ' + error.message); setLoading(false); return }
+    load()
+  }
+
+  async function editSalePayment(sale) {
+    const input = prompt(`Update amount paid for sale #${sale.id.slice(0, 8)} (Total: ${money(sale.total)}):`, sale.amount_paid)
+    if (input == null) return
+    const newPaid = Number(input)
+    if (isNaN(newPaid) || newPaid < 0) return
+    const { error } = await supabase.from('sales').update({ amount_paid: newPaid }).eq('id', sale.id)
+    if (error) { alert(error.message); return }
+    load()
+  }
 
   const perBiz = useMemo(() => {
     return BUSINESSES.map(b => {
@@ -55,14 +73,16 @@ export default function Dashboard() {
 
   function exportSalesCSV() {
     if (sales.length === 0) return
-    const headers = ['Business', 'Total', 'Amount Paid', 'Debt', 'Date']
+    const headers = ['Business', 'Customer', 'Total', 'Amount Paid', 'Debt', 'Seller', 'Date']
     const csvRows = [headers.join(',')]
     sales.forEach(s => {
       csvRows.push([
         `"${s.business}"`,
+        `"${s.customers?.name || 'Walk-in'}"`,
         s.total,
         s.amount_paid,
         Math.max(0, s.total - s.amount_paid),
+        `"${s.seller || ''}"`,
         `"${new Date(s.created_at).toLocaleString()}"`
       ].join(','))
     })
@@ -131,11 +151,60 @@ export default function Dashboard() {
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+          <h3>Sales Transactions Table</h3>
+          <div className="table-responsive card">
+            {sales.length === 0 ? (
+              <p className="muted">No sales transactions in this period.</p>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Business</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Debt Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sales.map(s => {
+                    const debt = Math.max(0, s.total - s.amount_paid)
+                    return (
+                      <tr key={s.id}>
+                        <td className="small muted">{new Date(s.created_at).toLocaleString()}</td>
+                        <td><span className="pill-badge">{s.business}</span></td>
+                        <td className="strong">{s.customers?.name || 'Walk-in'}</td>
+                        <td className="strong">{money(s.total)}</td>
+                        <td>{money(s.amount_paid)}</td>
+                        <td>
+                          {debt > 0 ? (
+                            <span className="badge owe">Owes {money(debt)}</span>
+                          ) : (
+                            <span className="badge instock">Fully Paid</span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="actions-cell">
+                            <button className="btn small" title="Edit Amount Paid" onClick={() => editSalePayment(s)}>✏️ Edit</button>
+                            <button className="btn small red-btn" title="Delete/Cancel Sale (Restores Stock)" onClick={() => deleteSaleTransaction(s)}>🗑️ Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </>
       )}
     </div>
   )
 }
+
 
 function Stat({ label, value, tone }) {
   return (

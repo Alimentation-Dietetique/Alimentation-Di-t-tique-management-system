@@ -147,7 +147,22 @@ input, select, textarea, button { font: inherit; }
 .cart-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; margin-bottom: 8px; }
 .cart-total-badge { background: var(--blue); color: #fff; padding: 4px 10px; border-radius: 8px; font-size: 14px; }
 .cart-empty-notice { color: var(--muted); font-size: 13px; font-style: italic; padding: 4px 0; }
-.cl-qty-group { display: flex; align-items: center; gap: 2px; }
-.qty-btn { border: 1px solid var(--line); background: #f8fafc; border-radius: 6px; width: 24px; height: 28px; font-weight: 700; cursor: pointer; display: grid; place-items: center; padding: 0; }
+/* Data Table & Badges */
+.table-responsive { overflow-x: auto; width: 100%; }
+.data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.data-table th { background: #f8fafc; padding: 10px 8px; border-bottom: 2px solid var(--line); font-weight: 700; color: var(--muted); }
+.data-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; }
+.badge.instock { background: #dcfce7; color: var(--green); }
+.badge.lowstock { background: #fef3c7; color: var(--amber); }
+.badge.outofstock, .badge.owe { background: #fee2e2; color: var(--red); }
+.status-pill { display: inline-block; padding: 2px 6px; border-radius: 99px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.status-pill.active { background: #e0f2fe; color: var(--blue); }
+.status-pill.hidden { background: #f1f5f9; color: var(--muted); }
+.pill-badge { background: #e2e8f0; color: var(--ink); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
+.red-btn { background: #fef2f2; color: var(--red); border-color: #fecaca; }
+.disabled-card { opacity: 0.55; cursor: not-allowed !important; pointer-events: none; }
+.outofstockbadge { background: #991b1b; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+
 
 

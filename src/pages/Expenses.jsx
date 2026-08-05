@@ -12,6 +12,7 @@ export default function Expenses() {
   const [categorySearch, setCategorySearch] = useState('')
   const [rows, setRows] = useState([])
   const [allCategories, setAllCategories] = useState([])
+  const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
 
   async function load() {
@@ -19,7 +20,6 @@ export default function Expenses() {
       .select('*').order('created_at', { ascending: false }).limit(100)
     setRows(data || [])
 
-    // Fetch distinct category history to prevent duplicates
     if (data) {
       const existing = data.map(r => r.category).filter(Boolean)
       setAllCategories(Array.from(new Set(existing)))
@@ -28,7 +28,6 @@ export default function Expenses() {
 
   useEffect(() => { load() }, [])
 
-  // Combine standard presets with historical custom categories for this scope
   const availableCategories = useMemo(() => {
     const defaultPresets = EXPENSE_CATEGORIES[scope] || []
     const merged = Array.from(new Set([...defaultPresets, ...allCategories]))
@@ -43,11 +42,30 @@ export default function Expenses() {
   }, [availableCategories, categorySearch])
 
   useEffect(() => {
-    setCategory(availableCategories[0] || 'other')
-    setCustomTitle('')
-  }, [scope, availableCategories])
+    if (!editingId) {
+      setCategory(availableCategories[0] || 'other')
+      setCustomTitle('')
+    }
+  }, [scope, availableCategories, editingId])
 
-  async function add() {
+  function startEdit(r) {
+    setEditingId(r.id)
+    setScope(r.business || 'overall')
+    setCategory(r.category)
+    setCustomTitle(r.category)
+    setAmount(r.amount)
+    setNote(r.note || '')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setAmount('')
+    setNote('')
+    setCustomTitle('')
+  }
+
+  async function save() {
     if (!amount || Number(amount) <= 0) return
     const finalCategory = (category === 'other' || category === 'new') 
       ? (customTitle.trim() || 'other') 
@@ -59,18 +77,31 @@ export default function Expenses() {
     }
 
     setBusy(true)
-    const { error } = await supabase.from('expenses').insert({
+    const payload = {
       business: scope === 'overall' ? null : scope,
       category: finalCategory, 
       amount: Number(amount), 
       note: note || null,
-    })
-    setBusy(false)
-    if (error) { alert(error.message); return }
+    }
 
-    setAmount('')
-    setNote('')
-    setCustomTitle('')
+    let res
+    if (editingId) {
+      res = await supabase.from('expenses').update(payload).eq('id', editingId)
+    } else {
+      res = await supabase.from('expenses').insert(payload)
+    }
+
+    setBusy(false)
+    if (res.error) { alert(res.error.message); return }
+
+    cancelEdit()
+    load()
+  }
+
+  async function deleteExpense(r) {
+    if (!confirm(`Delete expense "${r.category}" of ${money(r.amount)}?`)) return
+    const { error } = await supabase.from('expenses').delete().eq('id', r.id)
+    if (error) { alert(error.message); return }
     load()
   }
 
@@ -78,6 +109,7 @@ export default function Expenses() {
     <div className="page">
       <h2>Expenses</h2>
       <div className="card">
+        <h3>{editingId ? 'Edit Expense Record' : 'Record New Expense'}</h3>
         <label>Which business?</label>
         <div className="segmented wrap">
           {['books', 'tofu', 'cantine', 'overall'].map(s => (
@@ -116,22 +148,56 @@ export default function Expenses() {
         <label>Description / Note (optional)</label>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. paid Jean for the week, receipt #42" />
 
-        <button className="btn primary" disabled={busy} onClick={add}>Record expense</button>
+        <div className="payrow">
+          <button className="btn primary" disabled={busy} onClick={save}>
+            {editingId ? 'Save Changes' : 'Record expense'}
+          </button>
+          {editingId && (
+            <button className="btn ghost" onClick={cancelEdit}>Cancel</button>
+          )}
+        </div>
       </div>
 
-      <h3>Recent Expenses</h3>
-      <div className="list">
-        {rows.map(r => (
-          <div className="listrow" key={r.id}>
-            <div>
-              <div className="strong">{r.category}</div>
-              <div className="muted small">{r.business || 'overall'} · {new Date(r.created_at).toLocaleDateString()}{r.note ? ` · ${r.note}` : ''}</div>
-            </div>
-            <div className="strong">{money(r.amount)}</div>
-          </div>
-        ))}
+      <h3>Expense Log Table</h3>
+      <div className="table-responsive card">
+        {rows.length === 0 ? (
+          <p className="muted">No expenses recorded yet.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Business</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Description</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id}>
+                  <td className="small muted">{new Date(r.created_at).toLocaleDateString()}</td>
+                  <td>
+                    <span className="pill-badge">{r.business || 'Overall'}</span>
+                  </td>
+                  <td className="strong">{r.category}</td>
+                  <td className="neg strong">{money(r.amount)}</td>
+                  <td className="small">{r.note || '—'}</td>
+                  <td>
+                    <div className="actions-cell">
+                      <button className="btn small" title="Edit Expense" onClick={() => startEdit(r)}>✏️</button>
+                      <button className="btn small red-btn" title="Delete Expense" onClick={() => deleteExpense(r)}>🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
 }
+
 
