@@ -14,6 +14,8 @@ export default function Dashboard() {
   const [products, setProducts] = useState([])
   const [payments, setPayments] = useState([])
   const [adjustments, setAdjustments] = useState([])
+  const [allSalesData, setAllSalesData] = useState([])
+  const [allPaymentsData, setAllPaymentsData] = useState([])
   const [salesSearch, setSalesSearch] = useState('')
   const [debtTotal, setDebtTotal] = useState(0)
   const [loading, setLoading] = useState(true)
