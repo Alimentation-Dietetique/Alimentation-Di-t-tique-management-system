@@ -23,21 +23,43 @@ export default function Dashboard() {
   async function load() {
     setLoading(true)
     const start = rangeStart(range)
-    let sq = supabase.from('sales').select('id,business,total,amount_paid,payment_method,created_at,seller,customers(name)').order('created_at', { ascending: false })
-    let eq = supabase.from('expenses').select('business,amount,created_at')
-    if (start) { sq = sq.gte('created_at', start.toISOString()); eq = eq.gte('created_at', start.toISOString()) }
+    let sq = supabase.from('sales').select('*').order('created_at', { ascending: false })
+    let eq = supabase.from('expenses').select('*')
+    if (start) { 
+      sq = sq.gte('created_at', start.toISOString())
+      eq = eq.gte('created_at', start.toISOString()) 
+    }
 
-    const [{ data: s }, { data: e }, { data: p }, { data: pay }, { data: adj }, { data: allSales }, { data: allPay }] = await Promise.all([
+    const [
+      { data: s, error: sErr }, 
+      { data: e, error: eErr }, 
+      { data: p }, 
+      { data: pay }, 
+      { data: adj }, 
+      { data: allSales }, 
+      { data: allPay },
+      { data: custs }
+    ] = await Promise.all([
       sq, 
       eq,
       supabase.from('products').select('*').eq('active', true),
-      supabase.from('payments').select('amount,payment_method,created_at'),
-      supabase.from('balance_adjustments').select('amount,payment_method,reason,created_at'),
-      supabase.from('sales').select('amount_paid,payment_method'),
+      supabase.from('payments').select('*'),
+      supabase.from('balance_adjustments').select('*'),
+      supabase.from('sales').select('total,amount_paid,payment_method'),
       supabase.from('payments').select('amount,payment_method'),
+      supabase.from('customers').select('id,name,phone'),
     ])
 
-    setSales(s || [])
+    if (sErr) console.error('Error loading sales:', sErr)
+    if (eErr) console.error('Error loading expenses:', eErr)
+
+    const custMap = new Map((custs || []).map(c => [c.id, c]))
+    const salesWithCust = (s || []).map(item => ({
+      ...item,
+      customers: item.customer_id ? custMap.get(item.customer_id) : null
+    }))
+
+    setSales(salesWithCust)
     setExpenses(e || [])
     setProducts(p || [])
     setPayments(pay || [])
