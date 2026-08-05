@@ -41,16 +41,19 @@ create table if not exists customers (
 
 -- ---------- sales (one per receipt) ----------
 create table if not exists sales (
-  id          uuid primary key default gen_random_uuid(),
-  business    business_type not null,
-  price_type  price_kind not null default 'detail',
-  customer_id uuid references customers(id) on delete set null,
-  total       numeric(12,2) not null,
-  amount_paid numeric(12,2) not null default 0,          -- outstanding = total - amount_paid (a debt when > 0)
-  seller      text,
-  note        text,
-  created_at  timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  business       business_type not null,
+  price_type     price_kind not null default 'detail',
+  customer_id    uuid references customers(id) on delete set null,
+  total          numeric(12,2) not null,
+  amount_paid    numeric(12,2) not null default 0,          -- outstanding = total - amount_paid (a debt when > 0)
+  payment_method text not null default 'cash',              -- 'cash' or 'momo'
+  seller         text,
+  note           text,
+  created_at     timestamptz not null default now()
 );
+
+alter table sales add column if not exists payment_method text not null default 'cash';
 
 create table if not exists sale_items (
   id           uuid primary key default gen_random_uuid(),
@@ -64,12 +67,24 @@ create table if not exists sale_items (
 
 -- ---------- payments against debts ----------
 create table if not exists payments (
-  id          uuid primary key default gen_random_uuid(),
-  sale_id     uuid references sales(id) on delete cascade,
-  customer_id uuid references customers(id) on delete set null,
-  amount      numeric(12,2) not null,
-  note        text,
-  created_at  timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  sale_id        uuid references sales(id) on delete cascade,
+  customer_id    uuid references customers(id) on delete set null,
+  amount         numeric(12,2) not null,
+  payment_method text not null default 'cash',
+  note           text,
+  created_at     timestamptz not null default now()
+);
+
+alter table payments add column if not exists payment_method text not null default 'cash';
+
+-- ---------- manual cash & momo balance adjustments ----------
+create table if not exists balance_adjustments (
+  id             uuid primary key default gen_random_uuid(),
+  payment_method text not null default 'cash',               -- 'cash' or 'momo'
+  amount         numeric(12,2) not null,                    -- + add money, - take money
+  reason         text,
+  created_at     timestamptz not null default now()
 );
 
 -- ---------- expenses (business null = overall / shared) ----------
@@ -121,13 +136,14 @@ begin
   -- if amount_paid omitted -> treat as fully paid
   v_paid := coalesce(nullif(payload->>'amount_paid','')::numeric, v_total);
 
-  insert into sales (business, price_type, customer_id, total, amount_paid, seller, note)
+  insert into sales (business, price_type, customer_id, total, amount_paid, payment_method, seller, note)
   values (
     (payload->>'business')::business_type,
     coalesce((payload->>'price_type')::price_kind, 'detail'),
     nullif(payload->>'customer_id','')::uuid,
     v_total,
     v_paid,
+    coalesce(payload->>'payment_method', 'cash'),
     payload->>'seller',
     payload->>'note'
   )
@@ -163,14 +179,14 @@ $$;
 -- =====================================================================
 --  RPC: record a payment against a debt
 -- =====================================================================
-create or replace function record_payment(p_sale_id uuid, p_amount numeric, p_note text default null)
+create or replace function record_payment(p_sale_id uuid, p_amount numeric, p_payment_method text default 'cash', p_note text default null)
 returns void
 language plpgsql
 security definer
 as $$
 begin
-  insert into payments (sale_id, customer_id, amount, note)
-  select p_sale_id, s.customer_id, p_amount, p_note from sales s where s.id = p_sale_id;
+  insert into payments (sale_id, customer_id, amount, payment_method, note)
+  select p_sale_id, s.customer_id, p_amount, coalesce(p_payment_method, 'cash'), p_note from sales s where s.id = p_sale_id;
 
   update sales set amount_paid = amount_paid + p_amount where id = p_sale_id;
 end;
@@ -217,26 +233,28 @@ $$;
 -- =====================================================================
 --  Row Level Security — internal tool, any signed-in user has full access
 -- =====================================================================
-alter table products        enable row level security;
-alter table customers       enable row level security;
-alter table sales           enable row level security;
-alter table sale_items      enable row level security;
-alter table payments        enable row level security;
-alter table expenses        enable row level security;
-alter table stock_movements enable row level security;
+alter table products            enable row level security;
+alter table customers           enable row level security;
+alter table sales               enable row level security;
+alter table sale_items          enable row level security;
+alter table payments            enable row level security;
+alter table expenses            enable row level security;
+alter table stock_movements     enable row level security;
+alter table balance_adjustments enable row level security;
 
 do $$
 declare t text;
 begin
-  foreach t in array array['products','customers','sales','sale_items','payments','expenses','stock_movements']
+  foreach t in array array['products','customers','sales','sale_items','payments','expenses','stock_movements','balance_adjustments']
   loop
     execute format('drop policy if exists auth_all on %I;', t);
     execute format('create policy auth_all on %I for all to authenticated using (true) with check (true);', t);
   end loop;
 end $$;
 
-grant execute on function create_sale(jsonb)                  to authenticated;
-grant execute on function record_payment(uuid, numeric, text) to authenticated;
-grant execute on function restock_product(uuid, numeric, text) to authenticated;
-grant execute on function delete_sale(uuid)                  to authenticated;
+grant execute on function create_sale(jsonb)                                to authenticated;
+grant execute on function record_payment(uuid, numeric, text, text)         to authenticated;
+grant execute on function restock_product(uuid, numeric, text)              to authenticated;
+grant execute on function delete_sale(uuid)                                to authenticated;
+
 

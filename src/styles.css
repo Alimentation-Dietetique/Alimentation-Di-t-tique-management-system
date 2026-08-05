@@ -162,7 +162,16 @@ input, select, textarea, button { font: inherit; }
 .pill-badge { background: #e2e8f0; color: var(--ink); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; text-transform: capitalize; }
 .red-btn { background: #fef2f2; color: var(--red); border-color: #fecaca; }
 .disabled-card { opacity: 0.55; cursor: not-allowed !important; pointer-events: none; }
-.outofstockbadge { background: #991b1b; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+/* Payment Method & Stock Valuation UX */
+.method-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; }
+.method-badge.cash { background: #dcfce7; color: var(--green); }
+.method-badge.momo { background: #e0f2fe; color: var(--blue); }
+.stock-val-card { border-left: 4px solid var(--blue); }
+.stock-val-header { display: flex; justify-content: space-between; align-items: center; font-size: 15px; }
+.stock-val-total { font-size: 22px; color: var(--blue); }
+.pay-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 2px; display: block; }
+.setup-mode-box { background: #f8fafc; border: 1px dashed var(--line); padding: 8px 12px; border-radius: 8px; font-size: 12px; }
+
 
 
 

@@ -6,6 +6,8 @@ import { money, num } from '../lib/format'
 export default function Sell({ seller }) {
   const [business, setBusiness] = useState('cantine')      // cantine first: highest frequency
   const [priceType, setPriceType] = useState('detail')
+  const [paymentMethod, setPaymentMethod] = useState('cash') // 'cash' | 'momo'
+  const [allowUnconstrainedStock, setAllowUnconstrainedStock] = useState(true) // Initial setup mode
   const [products, setProducts] = useState([])
   const [cart, setCart] = useState([])
   const [customers, setCustomers] = useState([])
@@ -39,19 +41,18 @@ export default function Sell({ seller }) {
   }
 
   function addLine(p, tier) {
-    if (p.track_stock && p.stock <= 0) {
+    if (!allowUnconstrainedStock && p.track_stock && p.stock <= 0) {
       alert(`"${p.name}" is out of stock! Cannot sell this item.`)
       return
     }
     const qty = tier ? Number(tier.qty) : 1
     const unit = tier ? priceFor(p, tier) / qty : priceFor(p, null)
 
-    // Check existing cart quantity for this product
     const existingInCart = cart
       .filter(l => l.product_id === p.id)
       .reduce((sum, l) => sum + l.quantity, 0)
 
-    if (p.track_stock && (existingInCart + qty) > p.stock) {
+    if (!allowUnconstrainedStock && p.track_stock && (existingInCart + qty) > p.stock) {
       alert(`Cannot add ${qty} ${p.unit}. Only ${p.stock - existingInCart} left in stock for "${p.name}".`)
       return
     }
@@ -118,6 +119,7 @@ export default function Sell({ seller }) {
       business, price_type: priceType,
       customer_id: customerId || null,
       amount_paid: paid,
+      payment_method: paymentMethod,
       seller,
       items,
     }
@@ -130,6 +132,7 @@ export default function Sell({ seller }) {
       date: new Date().toLocaleString(),
       businessName: biz.label,
       customerName: selectedCust?.name || 'Walk-in',
+      paymentMethod: paymentMethod === 'momo' ? '📱 Mobile Money (MoMo)' : '💵 Cash',
       items,
       total,
       paid,
@@ -143,6 +146,7 @@ export default function Sell({ seller }) {
     setFlash('Sale saved ✓'); setTimeout(() => setFlash(''), 1500)
     loadProducts()
   }
+
 
   return (
     <div className="sell">
@@ -251,6 +255,15 @@ export default function Sell({ seller }) {
           </select>
           <button className="btn ghost" onClick={quickAddCustomer}>+ Customer</button>
         </div>
+
+        <div className="payrow">
+          <label className="pay-label">Payment Method:</label>
+          <div className="segmented">
+            <button className={paymentMethod === 'cash' ? 'active' : ''} onClick={() => setPaymentMethod('cash')}>💵 Cash</button>
+            <button className={paymentMethod === 'momo' ? 'active' : ''} onClick={() => setPaymentMethod('momo')}>📱 MoMo</button>
+          </div>
+        </div>
+
         <div className="payrow">
           <div className="segmented">
             <button className={paidMode === 'full' ? 'active' : ''} onClick={() => setPaidMode('full')}>Paid Direct</button>
@@ -264,11 +277,11 @@ export default function Sell({ seller }) {
               className="paidinput fullwidth" 
               type="number" 
               step="any" 
-              placeholder="Cash received from client..."
+              placeholder={paymentMethod === 'cash' ? "Cash received from client..." : "MoMo amount received..."}
               value={cashTendered} 
               onChange={e => setCashTendered(e.target.value)} 
             />
-            {Number(cashTendered) > 0 && (
+            {Number(cashTendered) > 0 && paymentMethod === 'cash' && (
               <div className="changedue">
                 Change to return: <strong>{money(changeDue)}</strong>
               </div>
@@ -283,8 +296,19 @@ export default function Sell({ seller }) {
           </div>
         )}
 
+        <div className="setup-mode-box">
+          <label className="checkbox small">
+            <input 
+              type="checkbox" 
+              checked={allowUnconstrainedStock} 
+              onChange={e => setAllowUnconstrainedStock(e.target.checked)} 
+            />
+            <span>Allow selling if stock is zero (Initial Setup Mode)</span>
+          </label>
+        </div>
+
         <button className="btn primary big" disabled={saving || cart.length === 0} onClick={complete}>
-          {saving ? 'Saving…' : `Complete Sale — ${money(total)}`}
+          {saving ? 'Saving…' : `Complete Sale (${paymentMethod === 'momo' ? 'MoMo' : 'Cash'}) — ${money(total)}`}
         </button>
         {flash && <div className="flash">{flash}</div>}
       </div>

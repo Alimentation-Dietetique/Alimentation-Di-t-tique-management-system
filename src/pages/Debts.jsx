@@ -26,7 +26,15 @@ export default function Debts() {
     if (input == null) return
     const amount = Number(input)
     if (!amount || amount <= 0) return
-    const { error } = await supabase.rpc('record_payment', { p_sale_id: sale.id, p_amount: amount })
+
+    const methodChoice = prompt(`Payment method?\nType 'cash' for Cash, or 'momo' for Mobile Money:`, 'cash')
+    const payment_method = (methodChoice && methodChoice.toLowerCase().includes('momo')) ? 'momo' : 'cash'
+
+    const { error } = await supabase.rpc('record_payment', { 
+      p_sale_id: sale.id, 
+      p_amount: amount, 
+      p_payment_method: payment_method 
+    })
     if (error) { alert(error.message); return }
     load()
   }
