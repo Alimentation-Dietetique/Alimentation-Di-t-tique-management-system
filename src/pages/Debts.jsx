@@ -6,12 +6,15 @@ export default function Debts() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  const [editingDebt, setEditingDebt] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', amount_paid: '' })
+  const [saving, setSaving] = useState(false)
 
   async function load() {
     setLoading(true)
     const { data } = await supabase
       .from('sales')
-      .select('id,business,total,amount_paid,created_at,customers(name,phone)')
+      .select('id,business,total,amount_paid,customer_id,created_at,customers(id,name,phone)')
       .order('created_at', { ascending: false })
     const owed = (data || [])
       .map(s => ({ ...s, outstanding: Number(s.total) - Number(s.amount_paid) }))
@@ -39,13 +42,60 @@ export default function Debts() {
     load()
   }
 
-  async function editDebt(sale) {
-    const input = prompt(`Update amount paid for debt sale #${sale.id.slice(0, 8)} (Total: ${money(sale.total)}, Currently paid: ${money(sale.amount_paid)}):`, sale.amount_paid)
-    if (input == null) return
-    const newPaid = Number(input)
-    if (isNaN(newPaid) || newPaid < 0) return
-    const { error } = await supabase.from('sales').update({ amount_paid: newPaid }).eq('id', sale.id)
-    if (error) { alert(error.message); return }
+  function startEdit(sale) {
+    setEditingDebt(sale)
+    setEditForm({
+      name: sale.customers?.name || '',
+      phone: sale.customers?.phone || '',
+      amount_paid: sale.amount_paid ?? '',
+    })
+  }
+
+  function cancelEdit() {
+    setEditingDebt(null)
+    setEditForm({ name: '', phone: '', amount_paid: '' })
+  }
+
+  async function saveEdit() {
+    if (!editingDebt) return
+    const newPaid = Number(editForm.amount_paid)
+    if (isNaN(newPaid) || newPaid < 0) {
+      alert('Please enter a valid amount paid.')
+      return
+    }
+
+    setSaving(true)
+    let custId = editingDebt.customer_id
+
+    // Update or create customer record
+    if (custId) {
+      if (editForm.name.trim()) {
+        await supabase.from('customers').update({
+          name: editForm.name.trim(),
+          phone: editForm.phone.trim() || null,
+        }).eq('id', custId)
+      }
+    } else if (editForm.name.trim()) {
+      const { data: newCust } = await supabase.from('customers').insert({
+        name: editForm.name.trim(),
+        phone: editForm.phone.trim() || null,
+      }).select().single()
+
+      if (newCust) {
+        custId = newCust.id
+      }
+    }
+
+    // Update sale record
+    const { error } = await supabase.from('sales').update({
+      amount_paid: newPaid,
+      customer_id: custId || null,
+    }).eq('id', editingDebt.id)
+
+    setSaving(false)
+    if (error) { alert('Could not update debt: ' + error.message); return }
+
+    cancelEdit()
     load()
   }
 
@@ -153,7 +203,7 @@ export default function Debts() {
                     <td>
                       <div className="actions-cell">
                         <button className="btn small primary" title="Record Debt Payment" onClick={() => pay(r)}>💳 Pay</button>
-                        <button className="btn small" title="Edit Debt Record" onClick={() => editDebt(r)}>✏️ Edit</button>
+                        <button className="btn small" title="Edit Debt Record & Customer Info" onClick={() => startEdit(r)}>✏️ Edit</button>
                         {waUrl && (
                           <a className="btn small whatsapp-btn" href={waUrl} target="_blank" rel="noreferrer" title="Send WhatsApp Reminder">
                             💬 WA
@@ -169,8 +219,55 @@ export default function Debts() {
           </table>
         </div>
       )}
+
+      {/* Edit Debt & Customer Modal */}
+      {editingDebt && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '440px', margin: '0 auto' }}>
+            <h3>✏️ Edit Debt & Customer Details</h3>
+            <p className="small muted">Sale Receipt #{editingDebt.id.slice(0, 8)} · Total: <strong>{money(editingDebt.total)}</strong></p>
+
+            <label>Customer Name</label>
+            <input 
+              type="text" 
+              value={editForm.name} 
+              onChange={e => setEditForm({ ...editForm, name: e.target.value })} 
+              placeholder="e.g. Jean Paul" 
+            />
+
+            <label>Customer Phone (for WhatsApp / Calls)</label>
+            <input 
+              type="text" 
+              value={editForm.phone} 
+              onChange={e => setEditForm({ ...editForm, phone: e.target.value })} 
+              placeholder="e.g. +250 788 123 456" 
+            />
+
+            <label>Amount Paid So Far</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={editForm.amount_paid} 
+              onChange={e => setEditForm({ ...editForm, amount_paid: e.target.value })} 
+              placeholder="0" 
+            />
+
+            <div className="small muted" style={{ marginTop: '4px' }}>
+              Remaining Debt Balance: <strong className="debt-text">{money(Math.max(0, Number(editingDebt.total) - (Number(editForm.amount_paid) || 0)))}</strong>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={saving} onClick={saveEdit}>
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <button className="btn ghost" onClick={cancelEdit}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+
 
 
