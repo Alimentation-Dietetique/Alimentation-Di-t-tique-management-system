@@ -210,18 +210,20 @@ export default function Sell({ seller }) {
         {filteredProducts.length === 0 && <p className="muted">No products found.</p>}
         {filteredProducts.map(p => {
           const tiers = Array.isArray(p.price_tiers) ? p.price_tiers : null
-          const isOutOfStock = p.track_stock && p.stock <= 0
+          const isZeroStock = p.track_stock && p.stock <= 0
           const isLowStock = p.track_stock && p.stock > 0 && p.stock <= 5
+          const isBlocked = !allowUnconstrainedStock && isZeroStock
+
           if (tiers && tiers.length) {
             return (
-              <div key={p.id} className={`prodcard ${isOutOfStock ? 'disabled-card' : ''}`}>
+              <div key={p.id} className={`prodcard ${isBlocked ? 'disabled-card' : ''}`}>
                 <div className="prodname">
                   {p.name} 
-                  {isOutOfStock ? <span className="outofstockbadge">Out of Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
+                  {isZeroStock ? <span className="outofstockbadge">0 Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
                 </div>
                 <div className="tierrow">
                   {tiers.map((t, i) => (
-                    <button key={i} className="tierbtn" disabled={isOutOfStock} onClick={() => addLine(p, t)}>
+                    <button key={i} className="tierbtn" disabled={isBlocked} onClick={() => addLine(p, t)}>
                       + {t.label}<br /><small>{money(priceFor(p, t))}</small>
                     </button>
                   ))}
@@ -230,15 +232,15 @@ export default function Sell({ seller }) {
             )
           }
           return (
-            <button key={p.id} className={`prodcard tap ${isOutOfStock ? 'disabled-card' : ''}`} disabled={isOutOfStock} onClick={() => addLine(p, null)}>
+            <button key={p.id} className={`prodcard tap ${isBlocked ? 'disabled-card' : ''}`} disabled={isBlocked} onClick={() => addLine(p, null)}>
               <div className="prodname">
                 {p.name} 
-                {isOutOfStock ? <span className="outofstockbadge">Out of Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
+                {isZeroStock ? <span className="outofstockbadge">0 Stock</span> : isLowStock ? <span className="lowbadge">Low</span> : null}
               </div>
               <div className="prodprice">{money(priceFor(p, null))}</div>
               {p.track_stock && (
-                <div className={`prodstock ${isOutOfStock ? 'danger' : isLowStock ? 'warn' : ''}`}>
-                  {isOutOfStock ? 'Out of stock' : `stock: ${num(p.stock)}`}
+                <div className={`prodstock ${isZeroStock ? 'danger' : isLowStock ? 'warn' : ''}`}>
+                  {isZeroStock ? (allowUnconstrainedStock ? 'stock: 0 (Selling allowed)' : 'Out of stock') : `stock: ${num(p.stock)}`}
                 </div>
               )}
             </button>
