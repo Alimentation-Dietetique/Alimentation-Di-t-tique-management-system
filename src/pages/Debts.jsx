@@ -39,6 +39,24 @@ export default function Debts() {
     load()
   }
 
+  async function editDebt(sale) {
+    const input = prompt(`Update amount paid for debt sale #${sale.id.slice(0, 8)} (Total: ${money(sale.total)}, Currently paid: ${money(sale.amount_paid)}):`, sale.amount_paid)
+    if (input == null) return
+    const newPaid = Number(input)
+    if (isNaN(newPaid) || newPaid < 0) return
+    const { error } = await supabase.from('sales').update({ amount_paid: newPaid }).eq('id', sale.id)
+    if (error) { alert(error.message); return }
+    load()
+  }
+
+  async function deleteDebt(sale) {
+    if (!confirm(`Delete/Cancel debt record for ${sale.customers?.name || 'Customer'} of ${money(sale.total)}?\n(This will restore product stock quantity).`)) return
+    setLoading(true)
+    const { error } = await supabase.rpc('delete_sale', { p_sale_id: sale.id })
+    if (error) { alert('Could not delete: ' + error.message); setLoading(false); return }
+    load()
+  }
+
   function getWhatsAppUrl(sale) {
     const phone = sale.customers?.phone ? sale.customers.phone.replace(/[^0-9]/g, '') : ''
     if (!phone) return null
@@ -72,7 +90,11 @@ export default function Debts() {
   const filteredRows = useMemo(() => {
     if (!filter.trim()) return rows
     const f = filter.toLowerCase()
-    return rows.filter(r => (r.customers?.name || '').toLowerCase().includes(f) || r.business.toLowerCase().includes(f))
+    return rows.filter(r => 
+      (r.customers?.name || '').toLowerCase().includes(f) || 
+      (r.customers?.phone || '').toLowerCase().includes(f) || 
+      (r.business || '').toLowerCase().includes(f)
+    )
   }, [rows, filter])
 
   const totalOwed = rows.reduce((s, r) => s + r.outstanding, 0)
@@ -80,7 +102,7 @@ export default function Debts() {
   return (
     <div className="page">
       <div className="header-row">
-        <h2>Debts <span className="pill">{money(totalOwed)}</span></h2>
+        <h2>Debts Management <span className="pill">{money(totalOwed)}</span></h2>
         {rows.length > 0 && (
           <button className="btn small ghost" onClick={exportCSV}>📥 Export CSV</button>
         )}
@@ -88,43 +110,67 @@ export default function Debts() {
 
       <input 
         type="text" 
-        placeholder="🔍 Filter customer or business..." 
+        placeholder="🔍 Search debt table by customer name, phone, or business line..." 
         value={filter} 
         onChange={e => setFilter(e.target.value)}
         className="searchinput"
       />
 
       {loading && <p className="muted">Loading…</p>}
-      {!loading && filteredRows.length === 0 && <p className="muted">No outstanding debts 🎉</p>}
-      <div className="list">
-        {filteredRows.map(r => {
-          const waUrl = getWhatsAppUrl(r)
-          return (
-            <div className="listrow" key={r.id}>
-              <div>
-                <div className="strong">{r.customers?.name || 'Walk-in'}</div>
-                <div className="muted small">
-                  {r.business} · {new Date(r.created_at).toLocaleDateString()}
-                  {r.customers?.phone ? ` · ${r.customers.phone}` : ''}
-                </div>
-              </div>
-              <div className="right">
-                <div className="strong owe">{money(r.outstanding)}</div>
-                <div className="muted small">of {money(r.total)}</div>
-              </div>
-              <div className="actions-cell">
-                {waUrl && (
-                  <a className="btn small whatsapp-btn" href={waUrl} target="_blank" rel="noreferrer" title="Send WhatsApp Reminder">
-                    💬 WA
-                  </a>
-                )}
-                <button className="btn small primary" onClick={() => pay(r)}>Pay</button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {!loading && filteredRows.length === 0 && (
+        <div className="card">
+          <p className="muted">No matching debt records found 🎉</p>
+        </div>
+      )}
+
+      {!loading && filteredRows.length > 0 && (
+        <div className="table-responsive card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Phone</th>
+                <th>Business</th>
+                <th>Total Sale</th>
+                <th>Amount Paid</th>
+                <th>Outstanding Debt</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRows.map(r => {
+                const waUrl = getWhatsAppUrl(r)
+                return (
+                  <tr key={r.id}>
+                    <td className="small muted">{new Date(r.created_at).toLocaleDateString()}</td>
+                    <td className="strong">{r.customers?.name || 'Walk-in'}</td>
+                    <td className="small">{r.customers?.phone || '—'}</td>
+                    <td><span className="pill-badge">{r.business}</span></td>
+                    <td className="strong">{money(r.total)}</td>
+                    <td>{money(r.amount_paid)}</td>
+                    <td><span className="badge owe">{money(r.outstanding)}</span></td>
+                    <td>
+                      <div className="actions-cell">
+                        <button className="btn small primary" title="Record Debt Payment" onClick={() => pay(r)}>💳 Pay</button>
+                        <button className="btn small" title="Edit Debt Record" onClick={() => editDebt(r)}>✏️ Edit</button>
+                        {waUrl && (
+                          <a className="btn small whatsapp-btn" href={waUrl} target="_blank" rel="noreferrer" title="Send WhatsApp Reminder">
+                            💬 WA
+                          </a>
+                        )}
+                        <button className="btn small red-btn" title="Delete Debt Sale (Restores Stock)" onClick={() => deleteDebt(r)}>🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
+
 
