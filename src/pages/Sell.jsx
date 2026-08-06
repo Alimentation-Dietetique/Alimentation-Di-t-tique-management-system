@@ -18,6 +18,8 @@ export default function Sell({ seller }) {
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [balances, setBalances] = useState({ cash: 0, momo: 0 })
+  const [flash, setFlash] = useState('')
+  const [lastReceipt, setLastReceipt] = useState(null)
 
   const biz = businessOf(business)
 
