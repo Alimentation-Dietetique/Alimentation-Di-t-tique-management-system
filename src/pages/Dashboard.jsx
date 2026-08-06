@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [adjustments, setAdjustments] = useState([])
   const [allSalesData, setAllSalesData] = useState([])
   const [allPaymentsData, setAllPaymentsData] = useState([])
+  const [allExpensesData, setAllExpensesData] = useState([])
   const [salesSearch, setSalesSearch] = useState('')
   const [debtTotal, setDebtTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -38,7 +39,8 @@ export default function Dashboard() {
       { data: adj }, 
       { data: allSales }, 
       { data: allPay },
-      { data: custs }
+      { data: custs },
+      { data: allExp }
     ] = await Promise.all([
       sq, 
       eq,
@@ -48,6 +50,7 @@ export default function Dashboard() {
       supabase.from('sales').select('total,amount_paid,payment_method'),
       supabase.from('payments').select('amount,payment_method'),
       supabase.from('customers').select('id,name,phone'),
+      supabase.from('expenses').select('amount,payment_method'),
     ])
 
     if (sErr) console.error('Error loading sales:', sErr)
@@ -66,6 +69,7 @@ export default function Dashboard() {
     setAdjustments(adj || [])
     setAllSalesData(allSales || [])
     setAllPaymentsData(allPay || [])
+    setAllExpensesData(allExp || [])
 
     // outstanding debts are cumulative (all time)
     const { data: all } = await supabase.from('sales').select('total,amount_paid')
@@ -231,8 +235,14 @@ export default function Dashboard() {
       else cash += amt
     })
 
+    allExpensesData.forEach(e => {
+      const amt = Number(e.amount) || 0
+      if ((e.payment_method || 'cash') === 'momo') momo -= amt
+      else cash -= amt
+    })
+
     return { cash, momo }
-  }, [allSalesData, allPaymentsData, adjustments])
+  }, [allSalesData, allPaymentsData, adjustments, allExpensesData])
 
   const perBiz = useMemo(() => {
     return BUSINESSES.map(b => {

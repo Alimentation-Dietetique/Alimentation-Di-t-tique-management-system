@@ -17,8 +17,7 @@ export default function Sell({ seller }) {
   const [cashTendered, setCashTendered] = useState('')
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
-  const [flash, setFlash] = useState('')
-  const [lastReceipt, setLastReceipt] = useState(null)
+  const [balances, setBalances] = useState({ cash: 0, momo: 0 })
 
   const biz = businessOf(business)
 
@@ -31,8 +30,25 @@ export default function Sell({ seller }) {
     const { data } = await supabase.from('customers').select('id,name,phone').order('name')
     setCustomers(data || [])
   }
+  async function loadBalances() {
+    const [{ data: s }, { data: p }, { data: a }, { data: e }] = await Promise.all([
+      supabase.from('sales').select('amount_paid, payment_method'),
+      supabase.from('payments').select('amount, payment_method'),
+      supabase.from('balance_adjustments').select('amount, payment_method'),
+      supabase.from('expenses').select('amount, payment_method'),
+    ])
+
+    let cash = 0, momo = 0
+    ;(s || []).forEach(x => { const amt = Number(x.amount_paid)||0; if (x.payment_method === 'momo') momo += amt; else cash += amt })
+    ;(p || []).forEach(x => { const amt = Number(x.amount)||0; if (x.payment_method === 'momo') momo += amt; else cash += amt })
+    ;(a || []).forEach(x => { const amt = Number(x.amount)||0; if (x.payment_method === 'momo') momo += amt; else cash += amt })
+    ;(e || []).forEach(x => { const amt = Number(x.amount)||0; if (x.payment_method === 'momo') momo -= amt; else cash -= amt })
+
+    setBalances({ cash, momo })
+  }
+
   useEffect(() => { loadProducts(); setCart([]) }, [business])
-  useEffect(() => { loadCustomers() }, [])
+  useEffect(() => { loadCustomers(); loadBalances() }, [])
   useEffect(() => { if (!biz.hasSupply) setPriceType('detail') }, [business])
 
   function priceFor(p, tier) {
@@ -134,6 +150,7 @@ export default function Sell({ seller }) {
 
     setFundModal(null)
     setFundForm({ amount: '', reason: 'Float deposit' })
+    await loadBalances()
     setFlash(`${label} updated ✓`); setTimeout(() => setFlash(''), 1500)
   }
 
@@ -160,6 +177,8 @@ export default function Sell({ seller }) {
     const { data: saleId, error } = await supabase.rpc('create_sale', { payload })
     setSaving(false)
     if (error) { alert('Could not save: ' + error.message); return }
+
+    await loadBalances()
 
     setLastReceipt({
       id: saleId,
@@ -210,6 +229,18 @@ export default function Sell({ seller }) {
             style={b.key === business ? { background: b.color } : {}}
             onClick={() => setBusiness(b.key)}>{b.label}</button>
         ))}
+      </div>
+
+      {/* Live Money Balance Header */}
+      <div className="cards" style={{ gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+        <div className="stat green" style={{ padding: '8px 12px' }}>
+          <div className="stat-label" style={{ fontSize: '0.8rem' }}>💵 Cash in Hand</div>
+          <div className="stat-value" style={{ fontSize: '1.1rem' }}>{money(balances.cash)}</div>
+        </div>
+        <div className="stat blue" style={{ padding: '8px 12px' }}>
+          <div className="stat-label" style={{ fontSize: '0.8rem' }}>📱 MoMo Balance</div>
+          <div className="stat-value" style={{ fontSize: '1.1rem' }}>{money(balances.momo)}</div>
+        </div>
       </div>
 
       {biz.hasSupply && (

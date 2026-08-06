@@ -89,13 +89,16 @@ create table if not exists balance_adjustments (
 
 -- ---------- expenses (business null = overall / shared) ----------
 create table if not exists expenses (
-  id         uuid primary key default gen_random_uuid(),
-  business   business_type,                              -- null = shared (rent, staff food, transport)
-  category   text not null,
-  amount     numeric(12,2) not null,
-  note       text,
-  created_at timestamptz not null default now()
+  id             uuid primary key default gen_random_uuid(),
+  business       business_type,                              -- null = shared (rent, staff food, transport)
+  category       text not null,
+  amount         numeric(12,2) not null,
+  payment_method text not null default 'cash',
+  note           text,
+  created_at     timestamptz not null default now()
 );
+
+alter table expenses add column if not exists payment_method text not null default 'cash';
 
 -- ---------- stock movement audit ----------
 create table if not exists stock_movements (

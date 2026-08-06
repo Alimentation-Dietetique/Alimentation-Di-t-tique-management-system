@@ -59,12 +59,15 @@ export default function Expenses() {
     }
   }, [scope, availableCategories, editingId])
 
+  const [paymentMethod, setPaymentMethod] = useState('cash')
+
   function startEdit(r) {
     setEditingId(r.id)
     setScope(r.business || 'overall')
     setCategory(r.category)
     setCustomTitle(r.category)
     setAmount(r.amount)
+    setPaymentMethod(r.payment_method || 'cash')
     setNote(r.note || '')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -74,6 +77,7 @@ export default function Expenses() {
     setAmount('')
     setNote('')
     setCustomTitle('')
+    setPaymentMethod('cash')
   }
 
   async function save() {
@@ -92,6 +96,7 @@ export default function Expenses() {
       business: scope === 'overall' ? null : scope,
       category: finalCategory, 
       amount: Number(amount), 
+      payment_method: paymentMethod,
       note: note || null,
     }
 
@@ -162,6 +167,12 @@ export default function Expenses() {
         <label>Amount</label>
         <input type="number" step="any" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
 
+        <label className="pay-label" style={{ marginTop: '10px' }}>Paid from which account?</label>
+        <div className="segmented" style={{ marginBottom: '12px' }}>
+          <button className={paymentMethod === 'cash' ? 'active' : ''} onClick={() => setPaymentMethod('cash')}>💵 Cash in Hand</button>
+          <button className={paymentMethod === 'momo' ? 'active' : ''} onClick={() => setPaymentMethod('momo')}>📱 MoMo (Mobile Money)</button>
+        </div>
+
         <label>Description / Note (optional)</label>
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. paid Jean for the week, receipt #42" />
 
@@ -197,6 +208,7 @@ export default function Expenses() {
                 <th>Date</th>
                 <th>Business</th>
                 <th>Category</th>
+                <th>Paid From</th>
                 <th>Amount</th>
                 <th>Description</th>
                 <th>Actions</th>
@@ -210,6 +222,11 @@ export default function Expenses() {
                     <span className="pill-badge">{r.business || 'Overall'}</span>
                   </td>
                   <td className="strong">{r.category}</td>
+                  <td>
+                    <span className={`method-badge ${r.payment_method === 'momo' ? 'momo' : 'cash'}`}>
+                      {r.payment_method === 'momo' ? '📱 MoMo' : '💵 Cash'}
+                    </span>
+                  </td>
                   <td className="neg strong">{money(r.amount)}</td>
                   <td className="small">{r.note || '—'}</td>
                   <td>
