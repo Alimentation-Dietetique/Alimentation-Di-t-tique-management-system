@@ -90,6 +90,18 @@ export default function Dashboard() {
   const [editingSale, setEditingSale] = useState(null)
   const [editPaidInput, setEditPaidInput] = useState('')
 
+  const [viewingSale, setViewingSale] = useState(null)
+  const [saleDetailsItems, setSaleDetailsItems] = useState([])
+  const [loadingDetails, setLoadingDetails] = useState(false)
+
+  async function openSaleDetails(sale) {
+    setViewingSale(sale)
+    setLoadingDetails(true)
+    const { data: items } = await supabase.from('sale_items').select('*').eq('sale_id', sale.id)
+    setSaleDetailsItems(items || [])
+    setLoadingDetails(false)
+  }
+
   const [fundModal, setFundModal] = useState(null) // 'cash' | 'momo' | null
   const [fundForm, setFundForm] = useState({ amount: '', reason: 'Float deposit' })
   const [saving, setSaving] = useState(false)
@@ -420,8 +432,9 @@ export default function Dashboard() {
                         </td>
                         <td>
                           <div className="actions-cell">
+                            <button className="btn small primary" title="View Transaction Details & Sold Items" onClick={() => openSaleDetails(s)}>👁️ View</button>
                             <button className="btn small" title="Edit Amount Paid" onClick={() => startEditSale(s)}>✏️ Edit</button>
-                            <button className="btn small red-btn" title="Delete/Cancel Sale (Restores Stock)" onClick={() => setDeletingSale(s)}>🗑️ Delete</button>
+                            <button className="btn small red-btn" title="Delete/Cancel Sale (Restores Stock)" onClick={() => setDeletingSale(s)}>🗑️</button>
                           </div>
                         </td>
                       </tr>
@@ -432,6 +445,72 @@ export default function Dashboard() {
             )}
           </div>
         </>
+      )}
+
+      {/* Modal: View Transaction Details */}
+      {viewingSale && (
+        <div className="modal-overlay">
+          <div className="modal-content card printable-receipt" style={{ maxWidth: '500px', margin: '0 auto' }}>
+            <div className="receipt-header">
+              <h3>Alimentation Diététique</h3>
+              <p><span className="pill-badge">{viewingSale.business}</span> Transaction Receipt</p>
+              <small>{new Date(viewingSale.created_at).toLocaleString()}</small>
+              <div className="muted small" style={{ marginTop: '4px' }}>Receipt ID: <strong>#{viewingSale.id.slice(0, 8)}</strong></div>
+            </div>
+            <hr />
+            <div className="receipt-meta">
+              <div>Customer: <strong>{viewingSale.customers?.name || 'Walk-in'}</strong> {viewingSale.customers?.phone ? `(${viewingSale.customers.phone})` : ''}</div>
+              <div>Seller: <strong>{viewingSale.seller || 'Cashier'}</strong></div>
+              <div>Payment Method: <strong>{viewingSale.payment_method === 'momo' ? '📱 Mobile Money (MoMo)' : '💵 Cash'}</strong></div>
+            </div>
+            <hr />
+            <h4 style={{ margin: '8px 0' }}>📦 Sold Items Breakdown</h4>
+            {loadingDetails ? (
+              <p className="muted small">Loading sold items...</p>
+            ) : (
+              <div className="table-responsive" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {saleDetailsItems.length === 0 ? (
+                  <p className="muted small">No item breakdown found.</p>
+                ) : (
+                  <table className="data-table small-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {saleDetailsItems.map((it, idx) => (
+                        <tr key={idx}>
+                          <td className="strong">{it.product_name || 'Item'}</td>
+                          <td>{it.quantity}</td>
+                          <td>{money(it.unit_price)}</td>
+                          <td className="strong">{money(it.line_total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+            <hr />
+            <div className="receipt-totals">
+              <div className="kv"><span>Total Sale Amount:</span><strong>{money(viewingSale.total)}</strong></div>
+              <div className="kv"><span>Amount Paid:</span><span>{money(viewingSale.amount_paid)}</span></div>
+              {Number(viewingSale.total) - Number(viewingSale.amount_paid) > 0 ? (
+                <div className="kv debt-text"><span>Outstanding Debt:</span><strong>{money(Number(viewingSale.total) - Number(viewingSale.amount_paid))}</strong></div>
+              ) : (
+                <div className="kv change-text"><span>Status:</span><strong>Fully Paid ✓</strong></div>
+              )}
+            </div>
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" onClick={() => window.print()}>🖨️ Print Receipt</button>
+              <button className="btn ghost" onClick={() => { setViewingSale(null); setSaleDetailsItems([]); }}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal: Edit Sale Amount Paid */}

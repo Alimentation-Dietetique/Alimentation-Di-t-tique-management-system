@@ -10,6 +10,18 @@ export default function Debts() {
   const [payingDebt, setPayingDebt] = useState(null)
   const [deletingDebt, setDeletingDebt] = useState(null)
 
+  const [viewingDebtSale, setViewingDebtSale] = useState(null)
+  const [debtSaleItems, setDebtSaleItems] = useState([])
+  const [loadingItems, setLoadingItems] = useState(false)
+
+  async function openDebtDetails(sale) {
+    setViewingDebtSale(sale)
+    setLoadingItems(true)
+    const { data: items } = await supabase.from('sale_items').select('*').eq('sale_id', sale.id)
+    setDebtSaleItems(items || [])
+    setLoadingItems(false)
+  }
+
   const [payForm, setPayForm] = useState({ amount: '', payment_method: 'cash' })
   const [editForm, setEditForm] = useState({ name: '', phone: '', amount_paid: '' })
   const [saving, setSaving] = useState(false)
@@ -251,6 +263,7 @@ export default function Debts() {
                     <td><span className="badge owe">{money(r.outstanding)}</span></td>
                     <td>
                       <div className="actions-cell">
+                        <button className="btn small ghost" title="View Sold Items Breakdown" onClick={() => openDebtDetails(r)}>👁️ View</button>
                         <button className="btn small primary" title="Record Debt Payment" onClick={() => startPay(r)}>💳 Pay</button>
                         <button className="btn small" title="Edit Debt Record & Customer Info" onClick={() => startEdit(r)}>✏️ Edit</button>
                         {waUrl && (
@@ -266,6 +279,67 @@ export default function Debts() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal: View Debt Sale Details */}
+      {viewingDebtSale && (
+        <div className="modal-overlay">
+          <div className="modal-content card printable-receipt" style={{ maxWidth: '500px', margin: '0 auto' }}>
+            <div className="receipt-header">
+              <h3>Alimentation Diététique</h3>
+              <p><span className="pill-badge">{viewingDebtSale.business}</span> Debt Receipt</p>
+              <small>{new Date(viewingDebtSale.created_at).toLocaleString()}</small>
+              <div className="muted small" style={{ marginTop: '4px' }}>Receipt ID: <strong>#{viewingDebtSale.id.slice(0, 8)}</strong></div>
+            </div>
+            <hr />
+            <div className="receipt-meta">
+              <div>Customer: <strong>{viewingDebtSale.customers?.name || 'Walk-in'}</strong> {viewingDebtSale.customers?.phone ? `(${viewingDebtSale.customers.phone})` : ''}</div>
+              <div>Payment Method: <strong>{viewingDebtSale.payment_method === 'momo' ? '📱 Mobile Money (MoMo)' : '💵 Cash'}</strong></div>
+            </div>
+            <hr />
+            <h4 style={{ margin: '8px 0' }}>📦 Sold Items Breakdown</h4>
+            {loadingItems ? (
+              <p className="muted small">Loading sold items...</p>
+            ) : (
+              <div className="table-responsive" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {debtSaleItems.length === 0 ? (
+                  <p className="muted small">No item breakdown found.</p>
+                ) : (
+                  <table className="data-table small-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Qty</th>
+                        <th>Unit Price</th>
+                        <th>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {debtSaleItems.map((it, idx) => (
+                        <tr key={idx}>
+                          <td className="strong">{it.product_name || 'Item'}</td>
+                          <td>{it.quantity}</td>
+                          <td>{money(it.unit_price)}</td>
+                          <td className="strong">{money(it.line_total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+            <hr />
+            <div className="receipt-totals">
+              <div className="kv"><span>Total Sale Amount:</span><strong>{money(viewingDebtSale.total)}</strong></div>
+              <div className="kv"><span>Amount Paid So Far:</span><span>{money(viewingDebtSale.amount_paid)}</span></div>
+              <div className="kv debt-text"><span>Outstanding Debt:</span><strong>{money(viewingDebtSale.outstanding)}</strong></div>
+            </div>
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" onClick={() => window.print()}>🖨️ Print Receipt</button>
+              <button className="btn ghost" onClick={() => { setViewingDebtSale(null); setDebtSaleItems([]); }}>Close</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -369,6 +443,7 @@ export default function Debts() {
     </div>
   )
 }
+
 
 
 
