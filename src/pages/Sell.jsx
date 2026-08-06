@@ -116,8 +116,33 @@ export default function Sell({ seller }) {
   const [showCustModal, setShowCustModal] = useState(false)
   const [custForm, setCustForm] = useState({ name: '', phone: '' })
 
+  const [showServiceModal, setShowServiceModal] = useState(false)
+  const [serviceForm, setServiceForm] = useState({ name: '', price: '', qty: '1' })
+
   const [fundModal, setFundModal] = useState(null) // 'cash' | 'momo' | null
   const [fundForm, setFundForm] = useState({ amount: '', reason: 'Float deposit' })
+
+  function saveCustomService() {
+    if (!serviceForm.name.trim() || !serviceForm.price || Number(serviceForm.price) <= 0) {
+      alert('Please enter a valid service name and price.')
+      return
+    }
+    const name = `🛠️ ${serviceForm.name.trim()}`
+    const price = Number(serviceForm.price)
+    const qty = Number(serviceForm.qty) || 1
+    const key = 'custom_' + Date.now()
+
+    setCart(prev => [...prev, {
+      key,
+      product_id: null,
+      product_name: name,
+      quantity: qty,
+      unit_price: price,
+    }])
+
+    setShowServiceModal(false)
+    setServiceForm({ name: '', price: '', qty: '1' })
+  }
 
   async function saveQuickCustomer() {
     if (!custForm.name.trim()) return
@@ -252,21 +277,30 @@ export default function Sell({ seller }) {
         </div>
       )}
 
-      <div className="searchbox">
+      <div className="searchbox" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <input 
           type="text" 
           placeholder="🔍 Search items..." 
           value={search} 
           onChange={e => setSearch(e.target.value)} 
           className="searchinput"
+          style={{ flex: 1 }}
         />
+        <button className="btn small primary" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowServiceModal(true)}>
+          🛠️ + Custom Service / Fee
+        </button>
       </div>
 
       {/* Cart (Top Prominent Position so sellers see order grow immediately) */}
       <div className="cart-container">
         <div className="cart-header">
-          🛒 Current Order {cart.length > 0 ? `(${cart.length} items)` : '(Empty)'}
-          <span className="cart-total-badge">{money(total)}</span>
+          <span>🛒 Current Order {cart.length > 0 ? `(${cart.length} items)` : '(Empty)'}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="btn small ghost" style={{ padding: '2px 8px', fontSize: '0.8rem' }} onClick={() => setShowServiceModal(true)}>
+              🛠️ + Service / Fee
+            </button>
+            <span className="cart-total-badge">{money(total)}</span>
+          </div>
         </div>
         {cart.length === 0 ? (
           <div className="cart-empty-notice">Tap any product below to add it to this sale receipt.</div>
@@ -503,6 +537,49 @@ export default function Sell({ seller }) {
                 {saving ? 'Saving...' : 'Confirm Deposit'}
               </button>
               <button className="btn ghost" onClick={() => setFundModal(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Custom Service / Extra Fee */}
+      {showServiceModal && (
+        <div className="modal-overlay">
+          <div className="modal-content card" style={{ maxWidth: '420px', margin: '0 auto' }}>
+            <h3>🛠️ Add Custom Extra Service / Fee</h3>
+            <p className="small muted">Add extra service (e.g. Delivery, Binding, Transport, Milling) to this sale order.</p>
+
+            <label>Service / Fee Name</label>
+            <input 
+              type="text" 
+              value={serviceForm.name} 
+              onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} 
+              placeholder="e.g. Delivery Fee, Binding Service, Custom Work" 
+            />
+
+            <label>Price / Amount (RWF)</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={serviceForm.price} 
+              onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} 
+              placeholder="e.g. 1500" 
+            />
+
+            <label>Quantity</label>
+            <input 
+              type="number" 
+              step="any" 
+              value={serviceForm.qty} 
+              onChange={e => setServiceForm({ ...serviceForm, qty: e.target.value })} 
+              placeholder="1" 
+            />
+
+            <div className="modal-actions" style={{ marginTop: '16px' }}>
+              <button className="btn primary" disabled={!serviceForm.name.trim() || !serviceForm.price} onClick={saveCustomService}>
+                + Add Service to Order
+              </button>
+              <button className="btn ghost" onClick={() => setShowServiceModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
