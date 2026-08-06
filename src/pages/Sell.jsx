@@ -37,7 +37,7 @@ export default function Sell({ seller }) {
       supabase.from('sales').select('amount_paid, payment_method'),
       supabase.from('payments').select('amount, payment_method'),
       supabase.from('balance_adjustments').select('amount, payment_method'),
-      supabase.from('expenses').select('amount, payment_method'),
+      supabase.from('expenses').select('*'),
     ])
 
     let cash = 0, momo = 0

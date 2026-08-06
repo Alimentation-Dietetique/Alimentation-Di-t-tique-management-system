@@ -107,6 +107,17 @@ export default function Expenses() {
       res = await supabase.from('expenses').insert(payload)
     }
 
+    // Fallback: If payment_method column is not in database schema yet, save without it
+    if (res.error && (res.error.message.includes('payment_method') || res.error.message.includes('column'))) {
+      const fallbackPayload = { ...payload }
+      delete fallbackPayload.payment_method
+      if (editingId) {
+        res = await supabase.from('expenses').update(fallbackPayload).eq('id', editingId)
+      } else {
+        res = await supabase.from('expenses').insert(fallbackPayload)
+      }
+    }
+
     setBusy(false)
     if (res.error) { alert(res.error.message); return }
 

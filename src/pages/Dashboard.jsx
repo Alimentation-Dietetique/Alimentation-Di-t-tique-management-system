@@ -50,7 +50,7 @@ export default function Dashboard() {
       supabase.from('sales').select('total,amount_paid,payment_method'),
       supabase.from('payments').select('amount,payment_method'),
       supabase.from('customers').select('id,name,phone'),
-      supabase.from('expenses').select('amount,payment_method'),
+      supabase.from('expenses').select('*'),
     ])
 
     if (sErr) console.error('Error loading sales:', sErr)
