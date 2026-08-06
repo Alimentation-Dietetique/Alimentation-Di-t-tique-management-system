@@ -114,30 +114,46 @@ export default function Debts() {
   async function confirmDeleteDebt() {
     if (!deletingDebt) return
     setSaving(true)
-    let { error } = await supabase.rpc('delete_sale', { p_sale_id: deletingDebt.id })
 
-    if (error) {
-      console.warn('RPC delete_sale failed, falling back to manual deletion:', error.message)
-      const { data: items } = await supabase.from('sale_items').select('product_id, quantity').eq('sale_id', deletingDebt.id)
+    try {
+      // 1. Fetch sale items to restore product stock
+      const { data: items } = await supabase
+        .from('sale_items')
+        .select('product_id, quantity')
+        .eq('sale_id', deletingDebt.id)
+
       if (items && items.length) {
         for (const item of items) {
           if (item.product_id) {
-            const { data: prod } = await supabase.from('products').select('stock, track_stock').eq('id', item.product_id).single()
+            const { data: prod } = await supabase
+              .from('products')
+              .select('stock, track_stock')
+              .eq('id', item.product_id)
+              .single()
+
             if (prod && prod.track_stock) {
-              await supabase.from('products').update({ stock: Number(prod.stock || 0) + Number(item.quantity || 0) }).eq('id', item.product_id)
+              const newStock = Number(prod.stock || 0) + Number(item.quantity || 0)
+              await supabase.from('products').update({ stock: newStock }).eq('id', item.product_id)
             }
           }
         }
       }
-      const res = await supabase.from('sales').delete().eq('id', deletingDebt.id)
-      error = res.error
+
+      // 2. Delete the sale record
+      const { error } = await supabase.from('sales').delete().eq('id', deletingDebt.id)
+      if (error) {
+        alert('Could not delete debt record: ' + error.message)
+        setSaving(false)
+        return
+      }
+
+      setDeletingDebt(null)
+      load()
+    } catch (err) {
+      alert('Error deleting debt record: ' + err.message)
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
-    if (error) { alert('Could not delete debt record: ' + error.message); return }
-
-    setDeletingDebt(null)
-    load()
   }
 
   function getWhatsAppUrl(sale) {
