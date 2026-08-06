@@ -231,7 +231,7 @@ end;
 $$;
 
 -- =====================================================================
---  Row Level Security — internal tool, any signed-in user has full access
+--  Row Level Security — internal tool, any user/client has full access
 -- =====================================================================
 alter table products            enable row level security;
 alter table customers           enable row level security;
@@ -248,13 +248,14 @@ begin
   foreach t in array array['products','customers','sales','sale_items','payments','expenses','stock_movements','balance_adjustments']
   loop
     execute format('drop policy if exists auth_all on %I;', t);
-    execute format('create policy auth_all on %I for all to authenticated using (true) with check (true);', t);
+    execute format('create policy auth_all on %I for all to anon, authenticated using (true) with check (true);', t);
   end loop;
 end $$;
 
-grant execute on function create_sale(jsonb)                                to authenticated;
-grant execute on function record_payment(uuid, numeric, text, text)         to authenticated;
-grant execute on function restock_product(uuid, numeric, text)              to authenticated;
-grant execute on function delete_sale(uuid)                                to authenticated;
+grant execute on function create_sale(jsonb)                                to anon, authenticated, public;
+grant execute on function record_payment(uuid, numeric, text, text)         to anon, authenticated, public;
+grant execute on function restock_product(uuid, numeric, text)              to anon, authenticated, public;
+grant execute on function delete_sale(uuid)                                to anon, authenticated, public;
+
 
 
